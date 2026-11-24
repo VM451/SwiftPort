@@ -208,3 +208,19 @@ jobs:
 
       - name: Build WinUI app
         run: swiftport build --target windows --release
+
+      - name: Capture WinUI snapshots
+        # Launches the app per contract fixture × theme, screen-captures
+        # the pinned window rect. Golden comparison is machine-sensitive;
+        # strict diff runs on Windows hosts via `swiftport verify`.
+        run: swiftport verify --mode snapshots --platforms windows --capture-only --report
+
+      - name: Upload snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-windows
+          path: |
+            Verification/report.html
+            Verification/Snapshots/
+          if-no-files-found: ignore

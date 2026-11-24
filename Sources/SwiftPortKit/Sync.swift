@@ -108,7 +108,8 @@ public enum Sync {
                     + "(requires the Swift Android SDK — see Apps/Android/README.md)")
             } else {
                 skipped.append(platform)
-                actions.append("\(platform.rawValue): bridge codegen not yet implemented (later phase)")
+                actions.append("\(platform.rawValue): C# contract tests scaffolded; "
+                    + "C-ABI/PInvoke codegen pending (Phase 3)")
             }
         }
 

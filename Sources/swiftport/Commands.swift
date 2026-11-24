@@ -120,10 +120,22 @@ struct DoctorCommand: ParsableCommand {
         abstract: "Audit the host toolchain for required SDKs"
     )
 
+    @Option(name: .long, help: "Comma-separated platforms to audit (default: all enabled)")
+    var platforms: String?
+
     func run() throws {
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let root = RootLocator.find(from: cwd)
-        let config = root.flatMap { try? ProjectConfig.load(from: $0) }
+        var config = root.flatMap { try? ProjectConfig.load(from: $0) }
+        if let platforms {
+            let parsed = Set(platforms.split(separator: ",").compactMap {
+                ProjectConfig.Platform(rawValue: $0.trimmingCharacters(in: .whitespaces).lowercased())
+            })
+            guard !parsed.isEmpty else {
+                throw ValidationError("invalid --platforms value: \(platforms)")
+            }
+            config?.platforms = parsed
+        }
         let report = Doctor.run(root: root ?? cwd, config: config)
         print(Doctor.render(report))
         if !report.failed.isEmpty { throw ExitCode(1) }

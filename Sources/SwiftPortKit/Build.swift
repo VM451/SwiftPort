@@ -41,8 +41,7 @@ public enum Build {
         case .apple: try buildApple(root: root, release: release, jobs: jobs)
         case .linux: try buildLinux(root: root, release: release, jobs: jobs)
         case .android: try buildAndroid(root: root, release: release, jobs: jobs)
-        case .windows:
-            throw BuildError.unsupportedOnHost(target)
+        case .windows: try buildWindows(root: root, release: release, jobs: jobs)
         }
     }
 
@@ -142,5 +141,35 @@ public enum Build {
                                            result.status, result.combined)
         }
         print("Built Apps/Android (\(release ? "release" : "debug"))")
+    }
+
+    // MARK: - Windows
+
+    /// WinUI 3 builds require Windows — `dotnet build` on the app project.
+    static func buildWindows(root: URL, release: Bool, jobs: Int?) throws {
+        #if os(Windows)
+        let windowsDir = root.appendingPathComponent("Apps/Windows/src")
+        guard let project = try? FileManager.default.contentsOfDirectory(atPath: windowsDir.path)
+            .compactMap({ dir -> URL? in
+                let csproj = windowsDir.appendingPathComponent(dir)
+                    .appendingPathComponent(dir + ".csproj")
+                return FileManager.default.fileExists(atPath: csproj.path) ? csproj : nil
+            }).first else {
+            throw BuildError.commandFailed("locate WinUI project", 1,
+                                           "no *.App/*.csproj under Apps/Windows/src")
+        }
+        guard Shell.which("dotnet") != nil || Shell.which("dotnet.exe") != nil else {
+            throw BuildError.toolMissing("dotnet", "install the .NET 8 SDK: https://dotnet.microsoft.com/download")
+        }
+        var args = ["build", project.path, "-c", release ? "Release" : "Debug"]
+        if let jobs { args += ["-m:\(jobs)"] }
+        let result = try Shell.run("dotnet", arguments: args)
+        if !result.succeeded {
+            throw BuildError.commandFailed("dotnet build", result.status, result.combined)
+        }
+        print("Built \(project.lastPathComponent) (\(release ? "release" : "debug"))")
+        #else
+        throw BuildError.unsupportedOnHost(.windows)
+        #endif
     }
 }

@@ -37,8 +37,8 @@ public enum Shell {
         let outPipe = Pipe()
         let errPipe = Pipe()
 
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [executable] + arguments
+        process.executableURL = resolveExecutable(executable)
+        process.arguments = arguments
         if let currentDirectory { process.currentDirectoryURL = currentDirectory }
         var env = ProcessInfo.processInfo.environment
         for (key, value) in environment { env[key] = value }
@@ -85,10 +85,31 @@ public enum Shell {
         )
     }
 
+    /// Resolves `name` to an executable URL: direct paths pass through,
+    /// bare names are looked up on PATH (with Windows executable extensions).
+    static func resolveExecutable(_ name: String) -> URL {
+        if name.contains("/") || name.hasPrefix(".") {
+            return URL(fileURLWithPath: name)
+        }
+        if let path = which(name) { return URL(fileURLWithPath: path) }
+        #if os(Windows)
+        for ext in [".exe", ".bat", ".cmd"] {
+            if let path = which(name + ext) { return URL(fileURLWithPath: path) }
+        }
+        #endif
+        // Unresolvable — return as-is so `run` throws launchFailed.
+        return URL(fileURLWithPath: name)
+    }
+
     /// Returns the resolved path of an executable on PATH, or nil.
     public static func which(_ name: String) -> String? {
+        #if os(Windows)
+        let separator: Character = ";"
+        #else
+        let separator: Character = ":"
+        #endif
         let searchPaths = (ProcessInfo.processInfo.environment["PATH"] ?? "")
-            .split(separator: ":")
+            .split(separator: separator)
             .map(String.init)
         for dir in searchPaths {
             let candidate = URL(fileURLWithPath: dir).appendingPathComponent(name).path

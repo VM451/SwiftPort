@@ -65,7 +65,7 @@ public enum Init {
             notes.append("android: Compose app scaffolded — Swift→JNI bridge (swift-java) is generated on demand, see Apps/Android/README.md")
         }
         if options.platforms.contains(.windows) {
-            notes.append("windows targets scaffold as stubs — bridge codegen lands in Phase 3")
+            notes.append("windows: WinUI 3 + xunit scaffold — C-ABI/PInvoke bridge codegen pending (Phase 3)")
         }
 
         var gitInitialized = false

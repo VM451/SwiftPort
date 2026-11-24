@@ -26,7 +26,7 @@ jobs:
           echo "/tmp/swiftport-src/.build/release" >> "$GITHUB_PATH"
 
       - name: Toolchain check
-        run: swiftport doctor
+        run: swiftport doctor --platforms apple
 
       - name: Sync bridges & projects
         run: swiftport sync
@@ -75,7 +75,7 @@ jobs:
           echo "/tmp/swiftport-src/.build/release" >> "$GITHUB_PATH"
 
       - name: Toolchain check
-        run: swiftport doctor
+        run: swiftport doctor --platforms linux
 
       - name: Verify contracts + build Linux target
         run: |
@@ -107,7 +107,7 @@ jobs:
           echo "/tmp/swiftport-src/.build/release" >> "$GITHUB_PATH"
 
       - name: Toolchain check
-        run: swiftport doctor
+        run: swiftport doctor --platforms android
 
       - name: Verify contracts
         run: swiftport verify --mode contracts --platforms android
@@ -127,3 +127,35 @@ jobs:
 
       - name: Build APK
         run: swiftport build --target android --release
+
+  windows:
+    name: Windows (dotnet + contracts)
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+
+      - name: Build swiftport CLI
+        shell: pwsh
+        run: |
+          git clone --depth 1 "${env:SWIFTPORT_REPO:-https://github.com/nitiptc/swiftport}" C:\swiftport-src
+          swift build -c release --package-path C:\swiftport-src
+          echo "C:\swiftport-src\.build\release" >> $env:GITHUB_PATH
+
+      - name: Toolchain check
+        run: swiftport doctor --platforms windows
+
+      - name: Verify contracts
+        run: swiftport verify --mode contracts --platforms windows
+
+      - name: Build WinUI app
+        run: swiftport build --target windows --release

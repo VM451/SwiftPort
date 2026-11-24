@@ -146,13 +146,28 @@ public enum Verify {
                 }
             }
         }
+        #if os(Windows)
+        if platforms.contains(.windows) {
+            let testsDir = root.appendingPathComponent("Apps/Windows/tests")
+            let enumerator = FileManager.default.enumerator(at: testsDir, includingPropertiesForKeys: nil)
+            var csproj: URL?
+            while let url = enumerator?.nextObject() as? URL {
+                if url.pathExtension == "csproj" { csproj = url; break }
+            }
+            if let csproj {
+                results.append(try dotnetTest(csproj: csproj, name: "contracts:windows",
+                                              lowMemory: lowMemory, jobs: jobs))
+            }
+        }
+        #else
         if platforms.contains(.windows) {
             results.append(StageResult(
                 name: "contracts:windows",
                 ok: true,
-                detail: "skipped — windows contracts land with its bridge phase"
+                detail: "skipped — WinUI contract tests run on Windows CI"
             ))
         }
+        #endif
 
         if platforms.contains(.android) {
             let androidDir = root.appendingPathComponent("Apps/Android")
@@ -164,6 +179,26 @@ public enum Verify {
             }
         }
         return results
+    }
+
+    /// `dotnet test` on a Windows contract-test project.
+    static func dotnetTest(csproj: URL, name: String, lowMemory: Bool, jobs: Int?) throws -> StageResult {
+        guard Shell.which("dotnet") != nil || Shell.which("dotnet.exe") != nil else {
+            return StageResult(name: name, ok: false,
+                               detail: "dotnet SDK not found — install .NET 8 SDK")
+        }
+        var args = ["test", csproj.path]
+        let effective = Build.jobCount(jobs: jobs, lowMemory: lowMemory)
+        if let effective { args += ["-m:\(effective)"] }
+        guard let result = try? Shell.run("dotnet", arguments: args,
+                                          currentDirectory: csproj.deletingLastPathComponent()) else {
+            return StageResult(name: name, ok: false, detail: "failed to launch dotnet test")
+        }
+        let tail = result.combined
+            .components(separatedBy: .newlines)
+            .suffix(15)
+            .joined(separator: "\n")
+        return StageResult(name: name, ok: result.succeeded, detail: tail)
     }
 
     /// Runs a Gradle task inside Apps/Android via the wrapper.

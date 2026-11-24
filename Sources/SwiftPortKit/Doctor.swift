@@ -50,14 +50,18 @@ public enum Doctor {
             checks.append(contentsOf: androidChecks())
         }
 
-        // --- Windows (later phase) -------------------------------------------
+        // --- Windows -----------------------------------------------------------
         if platforms.contains(.windows) {
+            #if os(Windows)
+            checks.append(dotnetCheck())
+            #else
             checks.append(Check(
-                name: "windows toolchain",
+                name: "dotnet",
                 status: .skip,
-                detail: "bridge generation for windows lands in a later phase — no checks yet",
+                detail: "WinUI 3 builds on Windows only — the CI windows runner covers it",
                 fix: nil
             ))
+            #endif
         }
 
         return Report(checks: checks, root: root)
@@ -211,6 +215,23 @@ public enum Doctor {
             ))
         }
         return checks
+    }
+
+    /// .NET SDK presence — only meaningful on Windows hosts.
+    static func dotnetCheck() -> Check {
+        guard let dotnet = Shell.which("dotnet") ?? Shell.which("dotnet.exe") else {
+            return Check(name: "dotnet", status: .fail,
+                         detail: "dotnet SDK not found",
+                         fix: "Install .NET 8 SDK: https://dotnet.microsoft.com/download")
+        }
+        guard let result = try? Shell.run(dotnet, arguments: ["--version"]),
+              result.succeeded else {
+            return Check(name: "dotnet", status: .fail,
+                         detail: "dotnet found at \(dotnet) but `--version` failed",
+                         fix: "Reinstall the .NET SDK")
+        }
+        let version = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Check(name: "dotnet", status: .ok, detail: version, fix: nil)
     }
 
     /// Human-readable rendering of a report.

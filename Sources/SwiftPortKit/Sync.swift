@@ -103,8 +103,13 @@ public enum Sync {
         }
 
         for platform in [ProjectConfig.Platform.android, .windows] where config.platforms.contains(platform) {
-            skipped.append(platform)
-            actions.append("\(platform.rawValue): bridge codegen not yet implemented (later phase)")
+            if platform == .android {
+                actions.append("android: \(exports.count) export(s) ready for swift-java JNI codegen "
+                    + "(requires the Swift Android SDK — see Apps/Android/README.md)")
+            } else {
+                skipped.append(platform)
+                actions.append("\(platform.rawValue): bridge codegen not yet implemented (later phase)")
+            }
         }
 
         return Report(exports: exports, actions: actions, skippedPlatforms: skipped)

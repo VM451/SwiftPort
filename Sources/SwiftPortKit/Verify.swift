@@ -146,14 +146,61 @@ public enum Verify {
                 }
             }
         }
-        for platform in [ProjectConfig.Platform.android, .windows] where platforms.contains(platform) {
+        if platforms.contains(.windows) {
             results.append(StageResult(
-                name: "contracts:\(platform.rawValue)",
+                name: "contracts:windows",
                 ok: true,
-                detail: "skipped — \(platform.rawValue) contracts land with its bridge phase"
+                detail: "skipped — windows contracts land with its bridge phase"
             ))
         }
+
+        if platforms.contains(.android) {
+            let androidDir = root.appendingPathComponent("Apps/Android")
+            if FileManager.default.fileExists(atPath: androidDir.path) {
+                results.append(try gradleTask(
+                    androidDir: androidDir, task: "testDebugUnitTest",
+                    name: "contracts:android", lowMemory: lowMemory, jobs: jobs
+                ))
+            }
+        }
         return results
+    }
+
+    /// Runs a Gradle task inside Apps/Android via the wrapper.
+    static func gradleTask(
+        androidDir: URL,
+        task: String,
+        name: String,
+        lowMemory: Bool,
+        jobs: Int?
+    ) throws -> StageResult {
+        let gradlew = androidDir.appendingPathComponent("gradlew")
+        guard FileManager.default.fileExists(atPath: gradlew.path) else {
+            return StageResult(name: name, ok: false,
+                               detail: "gradlew missing in Apps/Android — re-run swiftport init")
+        }
+        // /usr/bin/javac is a stub on macOS without a JDK — fail with a
+        // clear hint instead of gradlew's launcher error.
+        if Shell.which("javac") == nil
+            || ((try? Shell.run("javac", arguments: ["-version"]))?.succeeded != true) {
+            return StageResult(name: name, ok: false,
+                               detail: "JDK 17+ required — install a JDK and re-run `swiftport doctor`")
+        }
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o755], ofItemAtPath: gradlew.path)
+        var args = [task]
+        let effective = Build.jobCount(jobs: jobs, lowMemory: lowMemory)
+        if let effective { args += ["--max-workers", String(effective)] }
+        guard let result = try? Shell.run(gradlew.path, arguments: args,
+                                          currentDirectory: androidDir) else {
+            return StageResult(name: name, ok: false,
+                               detail: "failed to launch gradlew in Apps/Android")
+        }
+        let tail = result.combined
+            .components(separatedBy: .newlines)
+            .suffix(15)
+            .joined(separator: "\n")
+        return StageResult(name: name, ok: result.succeeded, detail: tail)
     }
 
     /// True when pkg-config can see gtk4 + libadwaita (needed to build the
@@ -216,11 +263,47 @@ public enum Verify {
         lowMemory: Bool,
         jobs: Int?
     ) throws -> [SnapshotResult] {
+        var results: [SnapshotResult] = []
+
         #if os(macOS)
-        guard platforms.contains(.apple) else {
-            return [SnapshotResult(file: "-", status: .skipped,
-                                   diffFraction: nil)]
+        if platforms.contains(.apple) {
+            results.append(contentsOf: try runAppleSnapshots(
+                root: root, config: config,
+                update: update, captureOnly: captureOnly,
+                lowMemory: lowMemory, jobs: jobs
+            ))
         }
+        #endif
+
+        if platforms.contains(.android) {
+            results.append(contentsOf: try runAndroidSnapshots(
+                root: root, config: config,
+                update: update, captureOnly: captureOnly,
+                lowMemory: lowMemory, jobs: jobs
+            ))
+        }
+
+        for platform in platforms where platform == .linux || platform == .windows {
+            results.append(SnapshotResult(
+                file: platform.rawValue, status: .skipped, diffFraction: nil))
+        }
+        if results.isEmpty {
+            results.append(SnapshotResult(file: "-", status: .skipped, diffFraction: nil))
+        }
+        return results
+    }
+
+    // MARK: - Apple snapshots
+
+    #if os(macOS)
+    static func runAppleSnapshots(
+        root: URL,
+        config: ProjectConfig,
+        update: Bool,
+        captureOnly: Bool,
+        lowMemory: Bool,
+        jobs: Int?
+    ) throws -> [SnapshotResult] {
         let appleDir = root.appendingPathComponent("Apps/Apple")
         let contractsDir = root.appendingPathComponent("Verification/Contracts")
         let snapshotsRoot = root.appendingPathComponent("Verification/Snapshots")
@@ -266,38 +349,119 @@ public enum Verify {
                                    detail: run.combined.suffix(2000).description)]
         }
 
-        // Collect produced PNGs.
-        let currentPNGs = pngFiles(in: currentDir)
+        return try finishSnapshots(
+            current: currentDir, golden: goldenDir,
+            update: update, captureOnly: captureOnly,
+            tolerance: config.verify.snapshotTolerance
+        )
+    }
+    #endif
+
+    // MARK: - Android snapshots (Paparazzi)
+
+    /// `recordPaparazziDebug` renders every contract fixture × theme through
+    /// the Compose UI; the PNGs land under `app/build/output/paparazzi` and
+    /// are diffed against `Verification/Snapshots/android` goldens.
+    static func runAndroidSnapshots(
+        root: URL,
+        config: ProjectConfig,
+        update: Bool,
+        captureOnly: Bool,
+        lowMemory: Bool,
+        jobs: Int?
+    ) throws -> [SnapshotResult] {
+        let androidDir = root.appendingPathComponent("Apps/Android")
+        let outputRoot = androidDir.appendingPathComponent("app/build/output/paparazzi")
+        let snapshotsRoot = root.appendingPathComponent("Verification/Snapshots")
+        let currentDir = snapshotsRoot.appendingPathComponent("current/android")
+        let goldenDir = snapshotsRoot.appendingPathComponent("android")
+
+        guard FileManager.default.fileExists(atPath: androidDir.path) else {
+            return [SnapshotResult(file: "android", status: .skipped, diffFraction: nil)]
+        }
+
+        let stage = try gradleTask(
+            androidDir: androidDir, task: "recordPaparazziDebug",
+            name: "snapshots:android", lowMemory: lowMemory, jobs: jobs
+        )
+        guard stage.ok else {
+            return [SnapshotResult(file: "recordPaparazziDebug", status: .regression,
+                                   diffFraction: nil, detail: stage.detail)]
+        }
+
+        try? FileManager.default.removeItem(at: currentDir)
+        try FileManager.default.createDirectory(at: currentDir, withIntermediateDirectories: true)
+        try copyPNGsPreservingStructure(from: outputRoot, to: currentDir)
+
+        return try finishSnapshots(
+            current: currentDir, golden: goldenDir,
+            update: update, captureOnly: captureOnly,
+            tolerance: config.verify.snapshotTolerance
+        )
+    }
+
+    /// Copies every PNG under `source` into `dest`, preserving relative paths.
+    static func copyPNGsPreservingStructure(from source: URL, to dest: URL) throws {
+        let fm = FileManager.default
+        let base = source.standardizedFileURL.resolvingSymlinksInPath().path
+        for png in pngFiles(in: source) {
+            let pngPath = png.standardizedFileURL.resolvingSymlinksInPath().path
+            let relative = pngPath.hasPrefix(base + "/")
+                ? String(pngPath.dropFirst(base.count + 1))
+                : png.lastPathComponent
+            let target = dest.appendingPathComponent(relative)
+            try fm.createDirectory(at: target.deletingLastPathComponent(),
+                                   withIntermediateDirectories: true)
+            try? fm.removeItem(at: target)
+            try fm.copyItem(at: png, to: target)
+        }
+    }
+
+    /// Shared tail of snapshot verification: bless, capture-only, or diff
+    /// every PNG under `current` against `golden`.
+    static func finishSnapshots(
+        current: URL,
+        golden: URL,
+        update: Bool,
+        captureOnly: Bool,
+        tolerance: Double
+    ) throws -> [SnapshotResult] {
+        let fm = FileManager.default
+        let base = current.standardizedFileURL.resolvingSymlinksInPath().path
+        func relName(_ url: URL) -> String {
+            let p = url.standardizedFileURL.resolvingSymlinksInPath().path
+            return p.hasPrefix(base + "/") ? String(p.dropFirst(base.count + 1)) : url.lastPathComponent
+        }
+
+        let currentPNGs = pngFiles(in: current)
         guard !currentPNGs.isEmpty else {
             return [SnapshotResult(file: "-", status: .regression, diffFraction: nil)]
         }
-
         if update {
-            try bless(current: currentDir, golden: goldenDir)
+            try bless(current: current, golden: golden)
             return currentPNGs.map {
-                SnapshotResult(file: $0.lastPathComponent, status: .blessed, diffFraction: nil)
+                SnapshotResult(file: relName($0), status: .blessed, diffFraction: nil)
             }
         }
         if captureOnly {
             return currentPNGs.map {
-                SnapshotResult(file: $0.lastPathComponent, status: .skipped, diffFraction: nil)
+                SnapshotResult(file: relName($0), status: .skipped, diffFraction: nil)
             }
         }
 
-        // Compare against goldens.
         var results: [SnapshotResult] = []
-        for current in currentPNGs {
-            let name = current.lastPathComponent
-            let golden = goldenDir.appendingPathComponent(name)
-            guard FileManager.default.fileExists(atPath: golden.path) else {
+        for png in currentPNGs {
+            let name = relName(png)
+            let goldenPNG = golden.appendingPathComponent(name)
+            guard fm.fileExists(atPath: goldenPNG.path) else {
                 results.append(SnapshotResult(file: name, status: .new, diffFraction: nil))
                 continue
             }
             do {
-                let diff = try SnapshotDiff.compare(pngA: current, pngB: golden)
+                let diff = try SnapshotDiff.compare(pngA: png, pngB: goldenPNG)
                 results.append(SnapshotResult(
                     file: name,
-                    status: diff <= config.verify.snapshotTolerance ? .match : .regression,
+                    status: diff <= tolerance ? .match : .regression,
                     diffFraction: diff
                 ))
             } catch {
@@ -305,9 +469,6 @@ public enum Verify {
             }
         }
         return results
-        #else
-        return [SnapshotResult(file: "-", status: .skipped, diffFraction: nil)]
-        #endif
     }
 
     static func pngFiles(in dir: URL) -> [URL] {

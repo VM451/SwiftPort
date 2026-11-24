@@ -21,8 +21,10 @@ A generated project contains:
   machine). `swiftport lint` fails the build if Apple-only frameworks leak in.
 - `Apps/Apple/` — SwiftUI app for macOS + iOS (XcodeGen project).
 - `Apps/Linux/` — GTK4 + Libadwaita app (Adwaita for Swift), GNOME HIG.
-- `Apps/Android/`, `Apps/Windows/` — stubs today; Kotlin/Compose and
-  WinUI 3 land in Phases 2–3.
+- `Apps/Android/` — Kotlin + Jetpack Compose (Material 3) app reading the
+  shared contract fixtures, with Paparazzi screenshot tests. The Swift→JNI
+  bridge (swift-java) is generated on demand.
+- `Apps/Windows/` — stub; WinUI 3 lands in Phase 3.
 - `Verification/` — shared JSON state fixtures every platform must render,
   plus golden UI snapshots with ≤0.1% pixel tolerance.
 - `.github/workflows/` — CI that builds all enabled targets and gates PRs
@@ -36,7 +38,7 @@ A generated project contains:
 | `swiftport doctor` | Audit SDKs/toolchains, print fix commands |
 | `swiftport lint` | Reject platform-locked imports in `Core/` |
 | `swiftport sync` | Scan `SwiftPortExported` APIs, regen bridges/projects |
-| `swiftport build --target <t>` | Build apple/linux (`--release`, `--low-memory`, `-j`) |
+| `swiftport build --target <t>` | Build apple/linux/android (`--release`, `--low-memory`, `-j`) |
 | `swiftport verify` | Full gate: lint + contract tests + snapshot diff |
 
 ## Install (development)
@@ -50,7 +52,9 @@ swift build -c release
 
 ## Status
 
-Phase 1 (this repo): CLI + template + verification harness for Apple + Linux.
+Phase 1 complete: CLI + template + verification harness for Apple + Linux.
+Phase 2 in progress: Android Compose scaffold + Paparazzi snapshots landed;
+Swift→JNI bridge codegen (swift-java) is the remaining piece.
 See `docs/PRD.md` for the full product requirements and roadmap.
 
 ## License

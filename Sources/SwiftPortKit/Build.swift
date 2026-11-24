@@ -40,7 +40,8 @@ public enum Build {
         switch target {
         case .apple: try buildApple(root: root, release: release, jobs: jobs)
         case .linux: try buildLinux(root: root, release: release, jobs: jobs)
-        case .android, .windows:
+        case .android: try buildAndroid(root: root, release: release, jobs: jobs)
+        case .windows:
             throw BuildError.unsupportedOnHost(target)
         }
     }
@@ -114,5 +115,32 @@ public enum Build {
             throw BuildError.commandFailed("swift build (Apps/Linux)", result.status, result.combined)
         }
         print("Built Apps/Linux (\(release ? "release" : "debug"))")
+    }
+
+    // MARK: - Android
+
+    static func buildAndroid(root: URL, release: Bool, jobs: Int?) throws {
+        let androidDir = root.appendingPathComponent("Apps/Android")
+        guard FileManager.default.fileExists(atPath: androidDir.path) else {
+            throw BuildError.commandFailed("locate Apps/Android", 1, "directory missing")
+        }
+        let gradlew = androidDir.appendingPathComponent("gradlew")
+        guard FileManager.default.fileExists(atPath: gradlew.path) else {
+            throw BuildError.toolMissing("gradlew",
+                "Apps/Android is missing the Gradle wrapper — re-run `swiftport init` or `gradle wrapper`")
+        }
+        // The wrapper script must be executable (template copies may drop +x).
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o755], ofItemAtPath: gradlew.path)
+
+        var args = [release ? "assembleRelease" : "assembleDebug"]
+        if let jobs { args += ["--max-workers", String(jobs)] }
+
+        let result = try Shell.run(gradlew.path, arguments: args, currentDirectory: androidDir)
+        if !result.succeeded {
+            throw BuildError.commandFailed("./gradlew \(args.joined(separator: " "))",
+                                           result.status, result.combined)
+        }
+        print("Built Apps/Android (\(release ? "release" : "debug"))")
     }
 }

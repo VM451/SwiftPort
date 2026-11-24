@@ -45,12 +45,17 @@ public enum Doctor {
             checks.append(contentsOf: gtkChecks())
         }
 
-        // --- Android / Windows (later phases) --------------------------------
-        for platform in [ProjectConfig.Platform.android, .windows] where platforms.contains(platform) {
+        // --- Android ---------------------------------------------------------
+        if platforms.contains(.android) {
+            checks.append(contentsOf: androidChecks())
+        }
+
+        // --- Windows (later phase) -------------------------------------------
+        if platforms.contains(.windows) {
             checks.append(Check(
-                name: "\(platform.rawValue) toolchain",
+                name: "windows toolchain",
                 status: .skip,
-                detail: "bridge generation for \(platform.rawValue) lands in a later phase — no checks yet",
+                detail: "bridge generation for windows lands in a later phase — no checks yet",
                 fix: nil
             ))
         }
@@ -157,6 +162,55 @@ public enum Doctor {
             pkgCheck("gtk4", minimum: "4.0", fix: gtkFix),
             pkgCheck("libadwaita-1", minimum: "1.4", fix: adwFix),
         ]
+    }
+
+    /// JDK + Android SDK presence for `swiftport build --target android`.
+    static func androidChecks() -> [Check] {
+        var checks: [Check] = []
+
+        // /usr/bin/javac on macOS is a stub that fails without a real JDK —
+        // require `javac -version` to actually succeed.
+        if let javac = Shell.which("javac"),
+           let result = try? Shell.run("javac", arguments: ["-version"]),
+           result.succeeded {
+            let version = result.combined.components(separatedBy: .newlines).first ?? javac
+            checks.append(Check(name: "javac", status: .ok,
+                                detail: version.trimmingCharacters(in: .whitespaces), fix: nil))
+        } else {
+            checks.append(Check(
+                name: "javac",
+                status: .fail,
+                detail: "JDK not found — Gradle needs JDK 17+",
+                fix: "brew install --cask temurin  (or: sudo apt install openjdk-17-jdk)"
+            ))
+        }
+
+        let env = ProcessInfo.processInfo.environment
+        var sdkPath = env["ANDROID_HOME"] ?? env["ANDROID_SDK_ROOT"]
+        if sdkPath == nil {
+            let home = env["HOME"].map { URL(fileURLWithPath: $0) }
+            for candidate in [
+                home?.appendingPathComponent("Library/Android/sdk"),
+                home?.appendingPathComponent("Android/Sdk"),
+            ].compactMap({ $0 }) {
+                if FileManager.default.fileExists(atPath: candidate.path) {
+                    sdkPath = candidate.path
+                    break
+                }
+            }
+        }
+        if let sdkPath, FileManager.default.fileExists(atPath: sdkPath) {
+            checks.append(Check(name: "android-sdk", status: .ok,
+                                detail: sdkPath, fix: nil))
+        } else {
+            checks.append(Check(
+                name: "android-sdk",
+                status: .fail,
+                detail: "Android SDK not found (ANDROID_HOME unset, no ~/Library/Android/sdk or ~/Android/Sdk)",
+                fix: "Install Android Studio or cmdline-tools: https://developer.android.com/studio"
+            ))
+        }
+        return checks
     }
 
     /// Human-readable rendering of a report.

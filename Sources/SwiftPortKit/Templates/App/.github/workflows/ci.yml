@@ -81,3 +81,49 @@ jobs:
         run: |
           swiftport verify --mode contracts --platforms linux
           swiftport build --target linux --release
+
+  android:
+    name: Android (Gradle + Paparazzi)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+
+      # GitHub's ubuntu image ships the Android SDK; ANDROID_HOME is preset.
+      - name: Build swiftport CLI
+        run: |
+          git clone --depth 1 "${SWIFTPORT_REPO:-https://github.com/nitiptc/swiftport}" /tmp/swiftport-src
+          swift build -c release --package-path /tmp/swiftport-src
+          echo "/tmp/swiftport-src/.build/release" >> "$GITHUB_PATH"
+
+      - name: Toolchain check
+        run: swiftport doctor
+
+      - name: Verify contracts
+        run: swiftport verify --mode contracts --platforms android
+
+      - name: Record Paparazzi screenshots
+        # Golden comparison is machine-sensitive; CI captures the matrix as
+        # artifacts. Strict diff runs locally via `swiftport verify`.
+        run: swiftport verify --mode snapshots --platforms android --capture-only
+
+      - name: Upload snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-android
+          path: Verification/Snapshots/current/android/
+          if-no-files-found: ignore
+
+      - name: Build APK
+        run: swiftport build --target android --release

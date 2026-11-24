@@ -160,12 +160,26 @@ struct TemplateTests {
         #expect(entries.contains("Task_Flow"))
 
         // Key monorepo dirs exist.
-        for dir in ["Core", "Apps/Apple", "Apps/Linux", "Verification/Contracts", "Bridges", ".github/workflows"] {
+        for dir in ["Core", "Apps/Apple", "Apps/Linux", "Apps/Android",
+                    "Verification/Contracts", "Bridges", ".github/workflows"] {
             #expect(fm.fileExists(atPath: dest.appendingPathComponent(dir).path), "missing \(dir)")
         }
 
         // Core package manifest is valid SwiftPM.
         #expect(fm.fileExists(atPath: dest.appendingPathComponent("Core/Package.swift").path))
+
+        // Android: bundle-id path dirs, Gradle files, substituted Kotlin.
+        let pkgDir = dest.appendingPathComponent("Apps/Android/app/src/main/java/com/example/taskflow")
+        #expect(fm.fileExists(atPath: pkgDir.appendingPathComponent("MainActivity.kt").path))
+        #expect(fm.fileExists(atPath: dest.appendingPathComponent("Apps/Android/gradlew").path))
+        #expect(fm.fileExists(atPath: dest.appendingPathComponent("Apps/Android/app/build.gradle.kts").path))
+        let manifest = try String(
+            contentsOf: dest.appendingPathComponent("Apps/Android/app/src/main/AndroidManifest.xml"),
+            encoding: .utf8)
+        #expect(manifest.contains("android:label=\"Task Flow\""))
+        #expect(!manifest.contains("__APP_NAME__"))
+        let activity = try String(contentsOf: pkgDir.appendingPathComponent("MainActivity.kt"), encoding: .utf8)
+        #expect(activity.contains("package com.example.taskflow"))
     }
 
     @Test func rejectsExistingProject() throws {

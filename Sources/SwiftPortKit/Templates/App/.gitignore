@@ -20,5 +20,14 @@ Bridges/LinuxC/*
 # Verification output (goldens under Snapshots/<platform>/ ARE committed)
 Verification/Snapshots/current/
 
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+*.apk
+*.aab
+*.keystore
+.cxx/
+
 # OS
 .DS_Store

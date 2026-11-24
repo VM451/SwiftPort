@@ -38,6 +38,7 @@ public enum Template {
                 "__APP_MODULE__": appModule,
                 "__APP_SLUG__": appSlug,
                 "__BUNDLE_ID__": bundleID,
+                "__BUNDLE_ID_PATH__": bundleID.replacingOccurrences(of: ".", with: "/"),
                 "__BUNDLE_ID_PREFIX__": bundleIDPrefix,
             ]
         }

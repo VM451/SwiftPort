@@ -61,8 +61,11 @@ public enum Init {
         try config.write(to: dest)
 
         var notes: [String] = []
-        if options.platforms.contains(.android) || options.platforms.contains(.windows) {
-            notes.append("android/windows targets scaffold as stubs — bridge codegen lands in Phase 2/3")
+        if options.platforms.contains(.android) {
+            notes.append("android: Compose app scaffolded — Swift→JNI bridge (swift-java) is generated on demand, see Apps/Android/README.md")
+        }
+        if options.platforms.contains(.windows) {
+            notes.append("windows targets scaffold as stubs — bridge codegen lands in Phase 3")
         }
 
         var gitInitialized = false

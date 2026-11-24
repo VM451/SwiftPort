@@ -1,12 +1,31 @@
 import Adwaita
 import AppCore
+import Foundation
 
 /// GNOME-HIG task list. Every `TaskPhase` has a designed state, matching the
 /// shared contract fixtures in `Verification/Contracts/`.
 struct TaskListView: View {
     let store: TaskStore
 
-    @State private var snapshot = TaskListSnapshot(phase: .loading)
+    @State private var snapshot: TaskListSnapshot
+
+    init(store: TaskStore) {
+        self.store = store
+        // Snapshot mode for `swiftport verify`: when SWIFTPORT_SCENARIO and
+        // SWIFTPORT_CONTRACTS_DIR are set, render that contract fixture
+        // directly instead of the live loading state.
+        let env = ProcessInfo.processInfo.environment
+        var initial = TaskListSnapshot(phase: .loading)
+        if let id = env["SWIFTPORT_SCENARIO"], !id.isEmpty,
+           let dir = env["SWIFTPORT_CONTRACTS_DIR"], !dir.isEmpty,
+           let fixtures = try? ContractScenario.loadAll(
+               from: URL(fileURLWithPath: dir)
+           ),
+           let scenario = fixtures.first(where: { $0.id == id }) {
+            initial = TaskStore.fixtureSnapshot(for: scenario)
+        }
+        _snapshot = State(wrappedValue: initial)
+    }
 
     var view: Body {
         VStack(spacing: 12) {

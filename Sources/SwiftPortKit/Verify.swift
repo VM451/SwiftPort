@@ -336,7 +336,15 @@ public enum Verify {
             ))
         }
 
-        for platform in platforms where platform == .linux || platform == .windows {
+        if platforms.contains(.linux) {
+            results.append(contentsOf: try runLinuxSnapshots(
+                root: root, config: config,
+                update: update, captureOnly: captureOnly,
+                lowMemory: lowMemory, jobs: jobs
+            ))
+        }
+
+        for platform in platforms where platform == .windows {
             results.append(SnapshotResult(
                 file: platform.rawValue, status: .skipped, diffFraction: nil))
         }
@@ -457,6 +465,105 @@ public enum Verify {
             update: update, captureOnly: captureOnly,
             tolerance: config.verify.snapshotTolerance
         )
+    }
+
+    // MARK: - Linux snapshots (Xvfb + GTK)
+
+    /// Runs the real GTK app under Xvfb once per contract fixture (the app
+    /// reads `SWIFTPORT_SCENARIO`/`SWIFTPORT_CONTRACTS_DIR`) and screenshots
+    /// the root window with ImageMagick's `import`. Light theme only —
+    /// libadwaita's color-scheme follows the desktop settings portal, which
+    /// is unreliable headless.
+    static func runLinuxSnapshots(
+        root: URL,
+        config: ProjectConfig,
+        update: Bool,
+        captureOnly: Bool,
+        lowMemory: Bool,
+        jobs: Int?
+    ) throws -> [SnapshotResult] {
+        let linuxDir = root.appendingPathComponent("Apps/Linux")
+        let snapshotsRoot = root.appendingPathComponent("Verification/Snapshots")
+        let currentDir = snapshotsRoot.appendingPathComponent("current/linux")
+        let goldenDir = snapshotsRoot.appendingPathComponent("linux")
+        let contractsDir = root.appendingPathComponent("Verification/Contracts")
+
+        func skipped(_ detail: String) -> [SnapshotResult] {
+            [SnapshotResult(file: "linux", status: .skipped,
+                            diffFraction: nil, detail: detail)]
+        }
+
+        guard FileManager.default.fileExists(atPath: linuxDir.path) else {
+            return skipped("Apps/Linux not found")
+        }
+        guard hostIsLinux else {
+            return skipped("GTK screenshots need a Linux host/CI")
+        }
+        let tokens = Template.Tokens(
+            appName: config.name, bundleIDPrefix: config.bundleIDPrefix)
+        let binary = linuxDir.appendingPathComponent(".build/debug/\(tokens.appModule)")
+        guard FileManager.default.fileExists(atPath: binary.path) else {
+            return skipped("Linux app not built — run `swiftport build --target linux` first")
+        }
+        guard Shell.which("Xvfb") != nil, Shell.which("import") != nil else {
+            return skipped("install xvfb + imagemagick for GTK snapshots "
+                + "(sudo apt install xvfb imagemagick)")
+        }
+        let fixtureIDs = contractFixtureIDs(in: contractsDir)
+        guard !fixtureIDs.isEmpty else {
+            return skipped("no contract fixtures found in Verification/Contracts")
+        }
+
+        // Ensure a fresh debug build so the scenario env vars are honored —
+        // cheap no-op when sources are unchanged.
+        _ = try? Shell.run("swift", arguments: ["build"], currentDirectory: linuxDir)
+
+        try? FileManager.default.removeItem(at: currentDir)
+        try FileManager.default.createDirectory(
+            at: currentDir, withIntermediateDirectories: true)
+
+        // Fixed display avoids collisions; verify runs platforms serially.
+        let display = ":98"
+        for fixtureID in fixtureIDs {
+            let png = currentDir.appendingPathComponent("\(fixtureID)__light.png")
+            let script = """
+            Xvfb \(display) -screen 0 1280x1024x24 >/dev/null 2>&1 &
+            XPID=$!
+            sleep 1
+            DISPLAY=\(display) SWIFTPORT_SCENARIO=\(fixtureID) \
+            SWIFTPORT_CONTRACTS_DIR=\(contractsDir.path) \
+            \(binary.path) >/dev/null 2>&1 &
+            APPPID=$!
+            sleep 6
+            DISPLAY=\(display) import -window root \(png.path)
+            kill $APPPID $XPID 2>/dev/null
+            wait $APPPID $XPID 2>/dev/null
+            """
+            _ = try? Shell.run("/bin/sh", arguments: ["-c", script])
+        }
+
+        return try finishSnapshots(
+            current: currentDir, golden: goldenDir,
+            update: update, captureOnly: captureOnly,
+            tolerance: config.verify.snapshotTolerance
+        )
+    }
+
+    /// Fixture ids from `Verification/Contracts/*.json` (the `id` field).
+    static func contractFixtureIDs(in dir: URL) -> [String] {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil) else { return [] }
+        return files
+            .filter { $0.pathExtension == "json" }
+            .compactMap { url -> String? in
+                guard let data = try? Data(contentsOf: url),
+                      let obj = try? JSONSerialization.jsonObject(with: data)
+                        as? [String: Any]
+                else { return nil }
+                return obj["id"] as? String
+            }
+            .sorted()
     }
 
     /// Copies every PNG under `source` into `dest`, preserving relative paths.

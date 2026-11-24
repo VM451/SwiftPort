@@ -61,7 +61,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            pkg-config libgtk-4-dev libadwaita-1-dev
+            pkg-config libgtk-4-dev libadwaita-1-dev xvfb imagemagick
 
       - name: Set up Swift
         uses: swift-actions/setup-swift@v2
@@ -81,6 +81,21 @@ jobs:
         run: |
           swiftport verify --mode contracts --platforms linux
           swiftport build --target linux --release
+
+      - name: Capture GTK snapshots
+        # Runs the real app under Xvfb once per contract fixture and
+        # screenshots the root window. Golden comparison is machine-
+        # sensitive; CI captures the matrix as artifacts for review.
+        # Strict diff runs locally on a Linux host via `swiftport verify`.
+        run: swiftport verify --mode snapshots --platforms linux --capture-only
+
+      - name: Upload snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-linux
+          path: Verification/Snapshots/current/linux/
+          if-no-files-found: ignore
 
   android:
     name: Android (Gradle + Paparazzi)

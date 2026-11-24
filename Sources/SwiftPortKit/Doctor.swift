@@ -162,10 +162,29 @@ public enum Doctor {
 
         let gtkFix = "sudo apt install libgtk-4-dev (or: brew install gtk4)"
         let adwFix = "sudo apt install libadwaita-1-dev (or: brew install libadwaita)"
-        return [
+        var checks = [
             pkgCheck("gtk4", minimum: "4.0", fix: gtkFix),
             pkgCheck("libadwaita-1", minimum: "1.4", fix: adwFix),
         ]
+
+        // Snapshot capture tools — only meaningful on Linux hosts, where
+        // `verify --mode snapshots` screenshots the real GTK app under Xvfb.
+        if FileManager.default.fileExists(atPath: "/etc/os-release") {
+            for (tool, fix) in [
+                ("Xvfb", "sudo apt install xvfb"),
+                ("import", "sudo apt install imagemagick"),
+            ] {
+                if let path = Shell.which(tool) {
+                    checks.append(Check(name: tool, status: .ok, detail: path, fix: nil))
+                } else {
+                    checks.append(Check(
+                        name: tool, status: .warn,
+                        detail: "not found — needed for `verify --mode snapshots` on Linux",
+                        fix: fix))
+                }
+            }
+        }
+        return checks
     }
 
     /// JDK + Android SDK presence for `swiftport build --target android`.

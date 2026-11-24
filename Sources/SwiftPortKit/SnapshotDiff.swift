@@ -3,10 +3,17 @@ import Foundation
 #if canImport(CoreGraphics) && canImport(ImageIO)
 import CoreGraphics
 import ImageIO
+#endif
 
 /// Pixel-level PNG comparison used by `swiftport verify --snapshots`.
 /// Returns the fraction of pixels that differ (0.0 = identical).
-/// macOS-only for now; other platforms report unsupported.
+///
+/// Rasterization is platform-specific:
+///   * Apple platforms: CoreGraphics/ImageIO decode.
+///   * Linux: ImageMagick `identify` + `convert` to raw RGBA8 (binary-safe —
+///     Shell stdout is UTF-8 text, so raw pixels go through temp files).
+///   * Other platforms (e.g. Windows): comparison reports unsupported;
+///     snapshot verification for those targets is CI-only for now.
 public enum SnapshotDiff {
     public enum DiffError: Error, CustomStringConvertible {
         case decodeFailed(String)
@@ -20,31 +27,31 @@ public enum SnapshotDiff {
         }
     }
 
+    struct Raster {
+        var width: Int
+        var height: Int
+        /// Tightly packed RGBA8, `width * height * 4` bytes.
+        var data: Data
+    }
+
     /// Compares two PNG files. Returns differing-pixel fraction in [0, 1].
     public static func compare(pngA: URL, pngB: URL) throws -> Double {
-        guard let imageA = decode(pngA), let imageB = decode(pngB) else {
-            throw DiffError.decodeFailed("\(pngA.lastPathComponent) / \(pngB.lastPathComponent)")
-        }
-        guard imageA.width == imageB.width, imageA.height == imageB.height else {
+        let rasterA = try rasterize(pngA)
+        let rasterB = try rasterize(pngB)
+        guard rasterA.width == rasterB.width, rasterA.height == rasterB.height else {
             throw DiffError.dimensionMismatch(
-                "\(imageA.width)x\(imageA.height)",
-                "\(imageB.width)x\(imageB.height)"
+                "\(rasterA.width)x\(rasterA.height)",
+                "\(rasterB.width)x\(rasterB.height)"
             )
         }
-        let width = imageA.width
-        let height = imageA.height
+        let width = rasterA.width
+        let height = rasterA.height
         let bytesPerPixel = 4
-        let bytesPerRow = width * bytesPerPixel
-
-        guard let dataA = bitmapBytes(imageA, bytesPerRow: bytesPerRow),
-              let dataB = bitmapBytes(imageB, bytesPerRow: bytesPerRow) else {
-            throw DiffError.decodeFailed("bitmap conversion failed")
-        }
 
         // A pixel differs if any of its 4 RGBA bytes differ.
         var differingPixels = 0
-        dataA.withUnsafeBytes { ptrA in
-            dataB.withUnsafeBytes { ptrB in
+        rasterA.data.withUnsafeBytes { ptrA in
+            rasterB.data.withUnsafeBytes { ptrB in
                 let baseA = ptrA.baseAddress!.assumingMemoryBound(to: UInt8.self)
                 let baseB = ptrB.baseAddress!.assumingMemoryBound(to: UInt8.self)
                 for pixel in 0..<(width * height) {
@@ -59,6 +66,22 @@ public enum SnapshotDiff {
             }
         }
         return Double(differingPixels) / Double(width * height)
+    }
+
+    // MARK: - Apple platforms
+
+    #if canImport(CoreGraphics) && canImport(ImageIO)
+    static func rasterize(_ url: URL) throws -> Raster {
+        guard let image = decode(url) else {
+            throw DiffError.decodeFailed(url.path)
+        }
+        let width = image.width
+        let height = image.height
+        let bytesPerRow = width * 4
+        guard let data = bitmapBytes(image, bytesPerRow: bytesPerRow) else {
+            throw DiffError.decodeFailed("bitmap conversion failed")
+        }
+        return Raster(width: width, height: height, data: data)
     }
 
     private static func decode(_ url: URL) -> CGImage? {
@@ -84,5 +107,46 @@ public enum SnapshotDiff {
         }
         return rendered ? data : nil
     }
+    #elseif os(Linux)
+    // MARK: - Linux (ImageMagick)
+
+    static func rasterize(_ url: URL) throws -> Raster {
+        guard Shell.which("convert") != nil, Shell.which("identify") != nil else {
+            throw DiffError.decodeFailed(
+                "ImageMagick not found — sudo apt install imagemagick")
+        }
+
+        guard let idResult = try? Shell.run(
+            "identify", arguments: ["-format", "%w %h", url.path]),
+              idResult.succeeded else {
+            throw DiffError.decodeFailed(url.path)
+        }
+        let dims = idResult.stdout
+            .split(whereSeparator: { $0 == " " || $0 == "\n" })
+            .compactMap { Int($0) }
+        guard dims.count == 2 else { throw DiffError.decodeFailed(url.path) }
+        let (width, height) = (dims[0], dims[1])
+
+        // Raw RGBA8 via temp file — Shell stdout is UTF-8 text and would
+        // corrupt binary pixel data.
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swiftport-\(UUID().uuidString).rgba")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        guard let conv = try? Shell.run(
+            "convert", arguments: [url.path, "rgba:\(tmp.path)"]),
+              conv.succeeded,
+              let data = try? Data(contentsOf: tmp),
+              data.count == width * height * 4 else {
+            throw DiffError.decodeFailed(url.path)
+        }
+        return Raster(width: width, height: height, data: data)
+    }
+    #else
+    // MARK: - Unsupported platforms
+
+    static func rasterize(_ url: URL) throws -> Raster {
+        throw DiffError.decodeFailed(
+            "PNG comparison is unsupported on this platform: \(url.lastPathComponent)")
+    }
+    #endif
 }
-#endif

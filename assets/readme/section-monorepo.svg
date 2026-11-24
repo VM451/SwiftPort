@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="120" viewBox="0 0 1200 120"
+     role="img" aria-labelledby="title desc">
+  <title id="title">What swiftport init generates</title>
+  <desc id="desc">Section header: the generated monorepo — Core, Apps, Bridges, Verification.</desc>
+
+  <rect width="1200" height="120" rx="22" fill="#0D0F12"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <g>
+      <rect x="56" y="43" width="9" height="9" rx="2" fill="#F05138"/>
+      <path d="M65 47.5 H70 M70 35 V61 M70 35 H76 M70 44 H76 M70 52 H76 M70 61 H76"
+            stroke="#6B7484" stroke-width="1.5" fill="none"/>
+      <rect x="76" y="32" width="6" height="6" rx="1.5" fill="none" stroke="#6B7484" stroke-width="1.5"/>
+      <rect x="76" y="41" width="6" height="6" rx="1.5" fill="none" stroke="#6B7484" stroke-width="1.5"/>
+      <rect x="76" y="49" width="6" height="6" rx="1.5" fill="none" stroke="#6B7484" stroke-width="1.5"/>
+      <rect x="76" y="58" width="6" height="6" rx="1.5" fill="none" stroke="#6B7484" stroke-width="1.5"/>
+    </g>
+    <text x="96" y="52" font-size="15" letter-spacing="2" fill="#F05138">$ swiftport init TaskFlow</text>
+    <text x="1144" y="52" text-anchor="end" font-size="15" fill="#5A6472">Core/ · Apps/ · Bridges/ · Verification/</text>
+  </g>
+
+  <text x="96" y="94" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="38" font-weight="700" fill="#F2F4F7">What gets generated</text>
+</svg>

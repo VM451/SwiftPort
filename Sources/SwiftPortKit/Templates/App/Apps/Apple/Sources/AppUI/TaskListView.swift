@@ -40,10 +40,14 @@ public struct TaskListView: View {
     }
 
     private var emptyView: some View {
-        ContentUnavailableView {
-            Label("No Tasks", systemImage: "checklist")
-        } description: {
-            Text("Add your first task using the field below.")
+        VStack(spacing: 0) {
+            ContentUnavailableView {
+                Label("No Tasks", systemImage: "checklist")
+            } description: {
+                Text("Add your first task using the field below.")
+            }
+            Divider()
+            addBar
         }
     }
 
@@ -78,15 +82,21 @@ public struct TaskListView: View {
             .listStyle(.plain)
 
             Divider()
-            HStack(spacing: 8) {
-                TextField("New task…", text: $newTaskTitle)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { submitNewTask() }
-                Button("Add") { submitNewTask() }
-                    .disabled(newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(10)
+            addBar
         }
+    }
+
+    /// Add-task field shared by the empty and loaded states — the empty
+    /// state must not dead-end, or a fresh install has no way to add.
+    private var addBar: some View {
+        HStack(spacing: 8) {
+            TextField("New task…", text: $newTaskTitle)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { submitNewTask() }
+            Button("Add") { submitNewTask() }
+                .disabled(newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(10)
     }
 
     private func submitNewTask() {

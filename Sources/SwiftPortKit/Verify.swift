@@ -129,15 +129,19 @@ public enum Verify {
         if platforms.contains(.linux) {
             let linuxDir = root.appendingPathComponent("Apps/Linux")
             if FileManager.default.fileExists(atPath: linuxDir.path) {
-                if Self.gtkToolchainAvailable() || Self.hostIsLinux {
+                // Contract tests build the whole Apps/Linux package, which
+                // links GTK4/libadwaita through adwaita-swift. That stack is
+                // only supported on Linux hosts (and Linux CI) — on macOS the
+                // brew glib is too new for adwaita-swift 0.1.0.
+                if Self.hostIsLinux && Self.gtkToolchainAvailable() {
                     results.append(try swiftTest(packageAt: linuxDir, name: "contracts:linux",
                                                  lowMemory: lowMemory, jobs: jobs))
                 } else {
                     results.append(StageResult(
                         name: "contracts:linux",
                         ok: true,
-                        detail: "skipped — gtk4/libadwaita not installed on this host "
-                            + "(required only on Linux machines and CI)"
+                        detail: "skipped — Linux contract tests run on Linux hosts/CI "
+                            + "(GTK4 + libadwaita required)"
                     ))
                 }
             }
@@ -247,8 +251,10 @@ public enum Verify {
                                    detail: build.combined.suffix(2000).description)]
         }
 
-        // Run it.
+        // Run it. Wipe `current/` first — stale captures from renamed or
+        // removed matrix variants would otherwise be re-blessed as ghosts.
         let binary = appleDir.appendingPathComponent(".build/debug/snapshot-runner")
+        try? FileManager.default.removeItem(at: currentDir)
         try FileManager.default.createDirectory(at: currentDir, withIntermediateDirectories: true)
         let run = try Shell.run(binary.path, arguments: [
             "--contracts-dir", contractsDir.path,

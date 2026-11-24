@@ -24,12 +24,28 @@ Golden PNGs per platform, blessed explicitly:
 
 ```sh
 swiftport verify --mode snapshots --update-snapshots   # bless current renders
-swiftport verify --mode snapshots                      # compare (CI gate)
+swiftport verify --mode snapshots                      # compare (local gate)
+swiftport verify --mode snapshots --capture-only       # capture without compare (CI)
 ```
 
-- `apple/` — macOS renders from `Apps/Apple`'s `snapshot-runner`
-  (light + dark per scenario). iOS goldens land with device/simulator capture.
+Apple matrix per scenario (filenames encode the variant):
+
+- themes: `light`, `dark`
+- viewports: `compact` (480×360), `standard` (800×600), `expanded` (1200×800)
+- stress variants on `standard`: `rtl` (right-to-left), `de` (German
+  locale), `bold` (bold text weight). macOS `ImageRenderer` ignores
+  `dynamicTypeSize`/`font` environment keys, so Dynamic Type coverage
+  lands with the iOS capture path.
+
+Example: `populated__dark__standard__largeType.png`
+
+- `apple/` — macOS renders from `Apps/Apple`'s `snapshot-runner`.
+  iOS goldens land with device/simulator capture.
 - `current/` — gitignored; latest capture for diffing.
+
+Golden comparison is machine-sensitive — font rasterization differs across
+macOS versions and GPUs. Bless and compare on the same class of machine;
+CI captures the matrix as artifacts rather than diffing foreign renders.
 
 Pixel tolerance comes from `swiftport.toml` (`verify.snapshot_tolerance`,
 default `0.001` = 0.1%). Any intentional UI change requires re-blessing —

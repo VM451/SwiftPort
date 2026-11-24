@@ -54,10 +54,14 @@ See template `README.md`. Key contracts:
 - No `dotnet` — Windows targets are CI-only.
 - `adwaita-swift` 0.1.0 does not compile on macOS (brew glib 2.90 removed
   `G_CONNECT_AFTER`); Linux app builds only on Linux/CI.
-- **iOS simulator screen capture is broken on this host** (iOS 27.0 runtime,
-  Xcode 27.2): `simctl io screenshot` returns flat frames or SpringBoard
-  for every app — even Apple's Settings. `verify` detects this and skips
-  iOS snapshots; blessing iOS goldens requires a healthy Mac or CI.
+- **iOS simulator capture is flaky on this host** (iOS 27.0 runtime,
+  Xcode 27.2): `simctl io screenshot` intermittently returns flat frames,
+  SpringBoard, or launch-screen frames — even Apple's Settings app is
+  affected. After `killall com.apple.CoreSimulator.CoreSimulatorService`
+  + device erase it works intermittently. `verify` guards against
+  blessing garbage (blank-frame + SpringBoard detection, `--mask=black`
+  pins the Dynamic Island). Treat local iOS goldens as suspect; CI is
+  the reliable capture environment.
 - No git remote configured — nothing has run on GitHub Actions yet; the
   template's generated-app CI is the first real exercise of the
   Android/Windows/Linux bridge code.

@@ -560,13 +560,14 @@ public enum Verify {
         // app failed to come to the foreground.
         let springRef = dd.appendingPathComponent("springboard-ref.png")
         _ = try? Shell.run("xcrun", arguments: [
-            "simctl", "io", "booted", "screenshot", springRef.path],
-            environment: xcodeEnvironment)
+            "simctl", "io", "booted", "screenshot", "--mask=black",
+            springRef.path], environment: xcodeEnvironment)
 
         let deviceTag = device.name.replacingOccurrences(of: " ", with: "_")
         var consecutiveBad = 0
         var badCount = 0
         var totalCount = 0
+        var badNames: [String] = []
         var captureAborted = false
         for fixtureID in fixtureIDs {
             for theme in config.verify.themes {
@@ -587,9 +588,12 @@ public enum Verify {
                 var bad = false
                 for attempt in 0..<2 {
                     Thread.sleep(forTimeInterval: attempt == 0 ? 3 : 5)
+                    // --mask=black pins the device mask (Dynamic Island,
+                    // rounded corners): the default policy is inconsistent
+                    // across boots and produced a 3.9% golden diff.
                     _ = try? Shell.run("xcrun", arguments: [
-                        "simctl", "io", "booted", "screenshot", png.path],
-                        environment: xcodeEnvironment)
+                        "simctl", "io", "booted", "screenshot", "--mask=black",
+                        png.path], environment: xcodeEnvironment)
                     bad = SnapshotDiff.isBlankCapture(png)
                     if !bad,
                        fm.fileExists(atPath: springRef.path),
@@ -603,6 +607,7 @@ public enum Verify {
                 if bad {
                     try? fm.removeItem(at: png)
                     badCount += 1
+                    badNames.append("\(fixtureID)__\(theme)__\(deviceTag).png")
                     consecutiveBad += 1
                     if consecutiveBad >= 3 { captureAborted = true; break }
                 } else {
@@ -622,11 +627,19 @@ public enum Verify {
                 + "reboot the simulator or run `swiftport verify` on CI")
         }
 
-        return try finishSnapshots(
+        var results = try finishSnapshots(
             current: currentDir, golden: goldenDir,
             update: update, captureOnly: captureOnly,
             tolerance: config.verify.snapshotTolerance
         )
+        // Individually bad captures are dropped rather than diffed/blessed,
+        // but the gap stays visible in the report instead of silent.
+        for name in badNames {
+            results.append(SnapshotResult(
+                file: name, status: .skipped, diffFraction: nil,
+                detail: "capture looked blank or showed SpringBoard"))
+        }
+        return results.sorted { $0.file < $1.file }
     }
 
     /// First available iPhone simulator — prefers an already-booted device.
@@ -758,6 +771,8 @@ public enum Verify {
             at: currentDir, withIntermediateDirectories: true)
 
         // Fixed display avoids collisions; verify runs platforms serially.
+        // Light-only for now: adwaita-swift 0.1.0 exposes no color-scheme API,
+        // so dark captures need portal/gsettings plumbing first.
         let display = ":98"
         for fixtureID in fixtureIDs {
             let png = currentDir.appendingPathComponent("\(fixtureID)__light.png")

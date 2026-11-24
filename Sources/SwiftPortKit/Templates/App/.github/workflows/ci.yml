@@ -37,6 +37,10 @@ jobs:
       - name: Verify contracts
         run: swiftport verify --mode contracts
 
+      - name: Accessibility audits
+        # XCUIAccessibilityAudit over the live app per fixture × theme.
+        run: swiftport verify --mode audits
+
       - name: Capture snapshots
         # Golden comparison is machine-sensitive (font rasterization differs
         # across hosts); CI captures the full matrix as artifacts for review.

@@ -240,6 +240,18 @@ struct TemplateTests {
         #expect(!manifest.contains("__APP_NAME__"))
         let activity = try String(contentsOf: pkgDir.appendingPathComponent("MainActivity.kt"), encoding: .utf8)
         #expect(activity.contains("package com.example.taskflow"))
+
+        // Apple: UITest audit bundle + scheme test action wired in project.yml.
+        let auditTests = try String(
+            contentsOf: dest.appendingPathComponent("Apps/Apple/UITests/AuditTests.swift"),
+            encoding: .utf8)
+        #expect(auditTests.contains("performAccessibilityAudit"))
+        #expect(!auditTests.contains("__APP_MODULE__"))
+        let projectYML = try String(
+            contentsOf: dest.appendingPathComponent("Apps/Apple/project.yml"),
+            encoding: .utf8)
+        #expect(projectYML.contains("Task_FlowUITests"))
+        #expect(projectYML.contains("bundle.ui-testing"))
     }
 
     @Test func rejectsExistingProject() throws {

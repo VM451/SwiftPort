@@ -54,13 +54,38 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
 
+  # UI-test bundle for `swiftport verify --mode audits` (PRD FR-7):
+  # runs XCUIAccessibilityAudit against the live app per contract fixture.
+  # Swift 5 mode — the audit API's issue handler is @preconcurrency and
+  # trips Swift 6 strict-concurrency sends.
+  __APP_MODULE__UITests:
+    type: bundle.ui-testing
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: UITests
+    dependencies:
+      - target: __APP_MODULE__Mac
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: __BUNDLE_ID__.uitests
+        PRODUCT_NAME: __APP_MODULE__UITests
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "5.0"
+        TEST_TARGET_NAME: __APP_MODULE__Mac
+
 schemes:
   __APP_MODULE__:
     build:
       targets:
         __APP_MODULE__Mac: all
+        __APP_MODULE__UITests: test
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - __APP_MODULE__UITests
   __APP_MODULE__iOS:
     build:
       targets:

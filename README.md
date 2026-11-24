@@ -9,7 +9,7 @@ break.
 swiftport init TaskFlow     # scaffold the monorepo
 cd TaskFlow
 swiftport doctor            # audit toolchain
-swiftport verify            # lint + contracts + visual snapshots
+swiftport verify            # lint + contracts + accessibility audits + snapshots
 swiftport build --target apple
 ```
 
@@ -30,7 +30,8 @@ A generated project contains:
   shim and C# `DllImport` wrappers over the `AppCoreCABI` C ABI (JSON wire
   format). `Core/` builds `AppCoreCABI` as a dynamic library per target.
 - `Verification/` — shared JSON state fixtures every platform must render,
-  plus golden UI snapshots with ≤0.1% pixel tolerance.
+  plus golden UI snapshots with ≤0.1% pixel tolerance and XCUI accessibility
+  audits (contrast, hit regions, labels) per fixture × theme.
 - `.github/workflows/` — CI that builds all enabled targets and gates PRs
   on contract + visual regressions.
 
@@ -43,7 +44,7 @@ A generated project contains:
 | `swiftport lint` | Reject platform-locked imports in `Core/` |
 | `swiftport sync` | Scan `SwiftPortExported` APIs, regen bridges/projects |
 | `swiftport build --target <t>` | Build apple/linux/android (`--release`, `--low-memory`, `-j`) |
-| `swiftport verify` | Full gate: lint + contract tests + snapshot diff (`--report` writes an HTML diff viewer) |
+| `swiftport verify` | Full gate: lint + contract tests + accessibility audits + snapshot diff (`--mode`, `--report`) |
 
 ## Install (development)
 

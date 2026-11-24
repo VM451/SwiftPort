@@ -11,6 +11,8 @@ public enum Verify {
     public struct Options: Sendable {
         public var contracts = true
         public var snapshots = false
+        /// FR-7 accessibility audits (XCUIAccessibilityAudit UI tests).
+        public var audits = false
         public var updateSnapshots = false
         /// Capture snapshots but skip golden comparison (CI artifact mode).
         public var captureOnly = false
@@ -91,7 +93,15 @@ public enum Verify {
             ))
         }
 
-        // 3. Snapshots.
+        // 3. Accessibility audits.
+        if options.audits {
+            stages.append(contentsOf: try runAudits(
+                root: root, config: config, platforms: platforms,
+                lowMemory: options.lowMemory, jobs: options.jobs
+            ))
+        }
+
+        // 4. Snapshots.
         if options.snapshots {
             snapshotResults = try runSnapshots(
                 root: root, config: config, platforms: platforms,
@@ -318,6 +328,82 @@ public enum Verify {
             .suffix(15)
             .joined(separator: "\n")
         return StageResult(name: name, ok: result.succeeded, detail: tail)
+    }
+
+    // MARK: - Accessibility audits
+
+    /// FR-7 audit stage: the generated `__APP_MODULE__UITests` bundle runs
+    /// `XCUIApplication.performAccessibilityAudit` against the live app for
+    /// every contract fixture × theme (contrast, hit regions, element
+    /// descriptions, clipping, traits). Requires one-time macOS UI
+    /// automation permission — the first run may show an auth prompt.
+    static func runAudits(
+        root: URL,
+        config: ProjectConfig,
+        platforms: Set<ProjectConfig.Platform>,
+        lowMemory: Bool,
+        jobs: Int?
+    ) throws -> [StageResult] {
+        #if os(macOS)
+        guard platforms.contains(.apple) else { return [] }
+        let appleDir = root.appendingPathComponent("Apps/Apple")
+        let name = "audits:apple"
+        guard FileManager.default.fileExists(atPath: appleDir.path) else {
+            return [StageResult(name: name, ok: true,
+                                detail: "skipped — Apps/Apple not found")]
+        }
+        guard Shell.which("xcodebuild") != nil else {
+            return [StageResult(name: name, ok: true,
+                                detail: "skipped — xcodebuild not found")]
+        }
+
+        // (Re)generate the Xcode project so the UITests target exists —
+        // mirrors `swiftport build --target apple`.
+        if Shell.which("xcodegen") != nil {
+            _ = try? Shell.run("xcodegen",
+                               arguments: ["generate", "--spec", "project.yml"],
+                               currentDirectory: appleDir,
+                               environment: xcodeEnvironment)
+        }
+        let tokens = Template.Tokens(
+            appName: config.name, bundleIDPrefix: config.bundleIDPrefix)
+        let project = appleDir.appendingPathComponent("\(tokens.appModule).xcodeproj")
+        guard FileManager.default.fileExists(atPath: project.path) else {
+            return [StageResult(name: name, ok: true,
+                                detail: "skipped — \(tokens.appModule).xcodeproj missing "
+                                    + "(run `swiftport sync` or install xcodegen)")]
+        }
+
+        // TEST_RUNNER_ prefix forwards SWIFTPORT_ROOT into the test-runner
+        // process environment (xcodebuild strips the prefix).
+        let result = try Shell.run("xcodebuild", arguments: [
+            "test",
+            "-project", project.path,
+            "-scheme", tokens.appModule,
+            "-destination", "platform=macOS",
+            "TEST_RUNNER_SWIFTPORT_ROOT=\(root.path)",
+        ], currentDirectory: appleDir, environment: xcodeEnvironment)
+
+        var detail = result.combined
+            .components(separatedBy: .newlines)
+            .suffix(20)
+            .joined(separator: "\n")
+        if !result.succeeded,
+           result.combined.range(
+               of: "failed to initialize for UI testing",
+               options: .caseInsensitive) != nil {
+            detail = "UI automation permission required — approve the macOS "
+                + "authentication prompt (or grant the test runner access in "
+                + "System Settings → Privacy & Security → Automation), then "
+                + "re-run `swiftport verify`.\n" + detail
+        }
+        return [StageResult(name: name, ok: result.succeeded, detail: detail)]
+        #else
+        return platforms.contains(.apple)
+            ? [StageResult(name: "audits:apple", ok: true,
+                           detail: "skipped — UI audits run on macOS hosts")]
+            : []
+        #endif
     }
 
     // MARK: - Snapshots (Apple)

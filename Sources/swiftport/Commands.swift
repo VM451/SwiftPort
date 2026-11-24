@@ -219,7 +219,7 @@ struct VerifyCommand: ParsableCommand {
         abstract: "Run lint, contract tests, and visual snapshot verification"
     )
 
-    @Option(name: .long, help: "Stage to run: all|contracts|snapshots")
+    @Option(name: .long, help: "Stage to run: all|contracts|audits|snapshots")
     var mode: String = "all"
 
     @Flag(name: .long, help: "Bless current snapshots as new goldens")
@@ -244,10 +244,15 @@ struct VerifyCommand: ParsableCommand {
         let root = try RootLocator.require()
         var options = Verify.Options()
         switch mode.lowercased() {
-        case "all": options.contracts = true; options.snapshots = true
-        case "contracts": options.contracts = true; options.snapshots = false
-        case "snapshots": options.contracts = false; options.snapshots = true
-        default: throw ValidationError("unknown --mode '\(mode)' — expected all|contracts|snapshots")
+        case "all":
+            options.contracts = true; options.snapshots = true; options.audits = true
+        case "contracts":
+            options.contracts = true; options.snapshots = false; options.audits = false
+        case "audits":
+            options.contracts = false; options.snapshots = false; options.audits = true
+        case "snapshots":
+            options.contracts = false; options.snapshots = true; options.audits = false
+        default: throw ValidationError("unknown --mode '\(mode)' — expected all|contracts|audits|snapshots")
         }
         options.updateSnapshots = updateSnapshots
         options.captureOnly = captureOnly

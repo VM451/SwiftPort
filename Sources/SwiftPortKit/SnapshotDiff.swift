@@ -68,6 +68,31 @@ public enum SnapshotDiff {
         return Double(differingPixels) / Double(width * height)
     }
 
+    /// Heuristic blank-screen detection for simulator captures: a framebuffer
+    /// that never composited app content comes back as a flat color field.
+    /// Samples every 32nd pixel and counts distinct quantized colors — real
+    /// UI (text, icons, lists) produces hundreds, a blank frame a handful.
+    /// Decode failures return false so verification falls through to the
+    /// normal diff path rather than blocking on this heuristic.
+    public static func isBlankCapture(_ url: URL) -> Bool {
+        guard let raster = try? rasterize(url) else { return false }
+        var colors = Set<UInt32>()
+        let total = raster.width * raster.height
+        raster.data.withUnsafeBytes { ptr in
+            let base = ptr.baseAddress!.assumingMemoryBound(to: UInt8.self)
+            var i = 0
+            while i < total {
+                let o = i * 4
+                colors.insert(
+                    (UInt32(base[o] >> 4) << 8)
+                    | (UInt32(base[o + 1] >> 4) << 4)
+                    | UInt32(base[o + 2] >> 4))
+                i += 32
+            }
+        }
+        return colors.count < 24
+    }
+
     // MARK: - Apple platforms
 
     #if canImport(CoreGraphics) && canImport(ImageIO)

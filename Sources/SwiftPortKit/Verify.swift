@@ -258,6 +258,21 @@ public enum Verify {
 
     /// True when pkg-config can see gtk4 + libadwaita (needed to build the
     /// Linux app's Adwaita dependency, even for contract tests).
+    /// Environment for xcodebuild/xcrun calls: points DEVELOPER_DIR at
+    /// Xcode when the active developer dir is Command Line Tools (which
+    /// lacks simctl and the iOS platform).
+    static var xcodeEnvironment: [String: String] {
+        #if os(macOS)
+        if ProcessInfo.processInfo.environment["DEVELOPER_DIR"] == nil {
+            let xcode = "/Applications/Xcode.app/Contents/Developer"
+            if FileManager.default.fileExists(atPath: xcode) {
+                return ["DEVELOPER_DIR": xcode]
+            }
+        }
+        #endif
+        return [:]
+    }
+
     static func gtkToolchainAvailable() -> Bool {
         guard Shell.which("pkg-config") != nil else { return false }
         let gtk = (try? Shell.run("pkg-config", arguments: ["--exists", "gtk4"]))?.succeeded ?? false
@@ -321,6 +336,11 @@ public enum Verify {
         #if os(macOS)
         if platforms.contains(.apple) {
             results.append(contentsOf: try runAppleSnapshots(
+                root: root, config: config,
+                update: update, captureOnly: captureOnly,
+                lowMemory: lowMemory, jobs: jobs
+            ))
+            results.append(contentsOf: try runIOSSnapshots(
                 root: root, config: config,
                 update: update, captureOnly: captureOnly,
                 lowMemory: lowMemory, jobs: jobs
@@ -415,6 +435,217 @@ public enum Verify {
             update: update, captureOnly: captureOnly,
             tolerance: config.verify.snapshotTolerance
         )
+    }
+
+    // MARK: - iOS snapshots (simulator)
+
+    /// Builds the app for an iPhone simulator, launches it once per
+    /// contract scenario × theme with `SWIFTPORT_*` env vars, and captures
+    /// `simctl io screenshot`. Filenames include the device name — goldens
+    /// are device-specific. The status bar is overridden for determinism.
+    static func runIOSSnapshots(
+        root: URL,
+        config: ProjectConfig,
+        update: Bool,
+        captureOnly: Bool,
+        lowMemory: Bool,
+        jobs: Int?
+    ) throws -> [SnapshotResult] {
+        let appleDir = root.appendingPathComponent("Apps/Apple")
+        let snapshotsRoot = root.appendingPathComponent("Verification/Snapshots")
+        let currentDir = snapshotsRoot.appendingPathComponent("current/ios")
+        let goldenDir = snapshotsRoot.appendingPathComponent("ios")
+        let contractsDir = root.appendingPathComponent("Verification/Contracts")
+        let fm = FileManager.default
+
+        func skipped(_ detail: String) -> [SnapshotResult] {
+            [SnapshotResult(file: "ios", status: .skipped,
+                            diffFraction: nil, detail: detail)]
+        }
+
+        guard fm.fileExists(atPath: appleDir.path) else {
+            return skipped("Apps/Apple not found")
+        }
+        guard Shell.which("xcodebuild") != nil, Shell.which("xcrun") != nil else {
+            return skipped("xcodebuild/xcrun not found")
+        }
+        guard let device = firstIPhoneSimulator() else {
+            return skipped("no iPhone simulator found — install one in Xcode "
+                + "(Xcode → Settings → Components)")
+        }
+        let fixtureIDs = contractFixtureIDs(in: contractsDir)
+        guard !fixtureIDs.isEmpty else {
+            return skipped("no contract fixtures found in Verification/Contracts")
+        }
+
+        let tokens = Template.Tokens(
+            appName: config.name, bundleIDPrefix: config.bundleIDPrefix)
+        let project = appleDir.appendingPathComponent("\(tokens.appModule).xcodeproj")
+        guard fm.fileExists(atPath: project.path) else {
+            return skipped("\(tokens.appModule).xcodeproj missing — run `swiftport sync`")
+        }
+
+        // Boot the simulator if needed; shut it down afterwards only when
+        // we booted it ourselves.
+        var weBooted = false
+        if device.state != "Booted" {
+            guard let boot = try? Shell.run("xcrun", arguments: ["simctl", "boot", device.udid], environment: xcodeEnvironment),
+                  boot.succeeded else {
+                return skipped("could not boot simulator \(device.name)")
+            }
+            weBooted = true
+            _ = try? Shell.run("xcrun", arguments: ["simctl", "bootstatus", device.udid, "-b"], environment: xcodeEnvironment)
+        }
+        defer {
+            _ = try? Shell.run("xcrun", arguments: ["simctl", "status_bar", "booted", "clear"], environment: xcodeEnvironment)
+            if weBooted {
+                _ = try? Shell.run("xcrun", arguments: ["simctl", "shutdown", device.udid], environment: xcodeEnvironment)
+            }
+        }
+
+        // Deterministic status bar (real clock would drift between goldens).
+        _ = try? Shell.run("xcrun", arguments: [
+            "simctl", "status_bar", "booted", "override",
+            "--time", "9:41",
+            "--batteryState", "charged", "--batteryLevel", "100",
+            "--wifiMode", "active", "--wifiBars", "3",
+            "--cellularMode", "active", "--cellularBars", "4",
+            "--operatorName", "SwiftPort",
+        ], environment: xcodeEnvironment)
+
+        // Build for the simulator.
+        let dd = fm.temporaryDirectory
+            .appendingPathComponent("swiftport-ios-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: dd) }
+        var buildArgs = [
+            "-project", project.path,
+            "-scheme", "\(tokens.appModule)iOS",
+            "-destination", "platform=iOS Simulator,id=\(device.udid)",
+            "-configuration", "Debug",
+            "-derivedDataPath", dd.path,
+            "build",
+        ]
+        let effective = Build.jobCount(jobs: jobs, lowMemory: lowMemory)
+        if let effective { buildArgs += ["-jobs", String(effective)] }
+        let buildResult = try? Shell.run(
+            "xcodebuild", arguments: buildArgs,
+            currentDirectory: appleDir, environment: xcodeEnvironment)
+        guard let build = buildResult, build.succeeded else {
+            return [SnapshotResult(
+                file: "ios-build", status: .regression, diffFraction: nil,
+                detail: (buildResult?.combined ?? "xcodebuild failed")
+                    .suffix(2000).description)]
+        }
+
+        // Locate the built .app.
+        let productsDir = dd.appendingPathComponent("Build/Products/Debug-iphonesimulator")
+        guard let appName = (try? fm.contentsOfDirectory(atPath: productsDir.path))?
+            .first(where: { $0.hasSuffix(".app") }) else {
+            return [SnapshotResult(file: "ios-app", status: .regression,
+                                   diffFraction: nil,
+                                   detail: "no .app in \(productsDir.path)")]
+        }
+        let appPath = productsDir.appendingPathComponent(appName)
+        guard let install = try? Shell.run("xcrun", arguments: [
+            "simctl", "install", "booted", appPath.path], environment: xcodeEnvironment), install.succeeded else {
+            return [SnapshotResult(file: "ios-install", status: .regression,
+                                   diffFraction: nil, detail: "simctl install failed")]
+        }
+
+        try? fm.removeItem(at: currentDir)
+        try fm.createDirectory(at: currentDir, withIntermediateDirectories: true)
+
+        // Reference frame of whatever is frontmost before the first launch —
+        // used to detect captures that actually show SpringBoard because the
+        // app failed to come to the foreground.
+        let springRef = dd.appendingPathComponent("springboard-ref.png")
+        _ = try? Shell.run("xcrun", arguments: [
+            "simctl", "io", "booted", "screenshot", springRef.path],
+            environment: xcodeEnvironment)
+
+        let deviceTag = device.name.replacingOccurrences(of: " ", with: "_")
+        var consecutiveBad = 0
+        var badCount = 0
+        var totalCount = 0
+        var captureAborted = false
+        for fixtureID in fixtureIDs {
+            for theme in config.verify.themes {
+                let png = currentDir.appendingPathComponent(
+                    "\(fixtureID)__\(theme)__\(deviceTag).png")
+                // SIMCTL_CHILD_* env vars are forwarded to the app process.
+                var launchEnv = xcodeEnvironment
+                launchEnv["SIMCTL_CHILD_SWIFTPORT_SCENARIO"] = fixtureID
+                launchEnv["SIMCTL_CHILD_SWIFTPORT_THEME"] = theme
+                launchEnv["SIMCTL_CHILD_SWIFTPORT_CONTRACTS_DIR"] = contractsDir.path
+                let launch = try? Shell.run("xcrun", arguments: [
+                    "simctl", "launch", "--terminate-running-process",
+                    "booted", tokens.bundleID,
+                ], environment: launchEnv)
+                guard let launch, launch.succeeded else { continue }
+                Thread.sleep(forTimeInterval: 3)
+                _ = try? Shell.run("xcrun", arguments: [
+                    "simctl", "io", "booted", "screenshot", png.path], environment: xcodeEnvironment)
+                totalCount += 1
+                // A capture is "bad" when the framebuffer never composited the
+                // app: either a flat uncomposited frame, or SpringBoard still
+                // frontmost because the app never appeared. Three in a row
+                // means a broken capture pipeline, not sparse screens.
+                var bad = SnapshotDiff.isBlankCapture(png)
+                if !bad, fm.fileExists(atPath: springRef.path),
+                   let diff = try? SnapshotDiff.compare(pngA: png, pngB: springRef),
+                   diff < 0.05 {
+                    bad = true
+                }
+                if bad {
+                    try? fm.removeItem(at: png)
+                    badCount += 1
+                    consecutiveBad += 1
+                    if consecutiveBad >= 3 { captureAborted = true; break }
+                } else {
+                    consecutiveBad = 0
+                }
+            }
+            if captureAborted { break }
+        }
+
+        // A host whose simulator never composites app content returns flat
+        // frames (white/black) or SpringBoard for most captures — blessing
+        // those as goldens would poison every other machine. Skip instead.
+        if captureAborted || (totalCount > 0 && badCount * 5 >= totalCount * 4) {
+            return skipped(
+                "simulator captures show no app content (\(badCount)/\(totalCount) bad) — "
+                + "screen capture is not compositing app frames on this host; "
+                + "reboot the simulator or run `swiftport verify` on CI")
+        }
+
+        return try finishSnapshots(
+            current: currentDir, golden: goldenDir,
+            update: update, captureOnly: captureOnly,
+            tolerance: config.verify.snapshotTolerance
+        )
+    }
+
+    /// First available iPhone simulator — prefers an already-booted device.
+    static func firstIPhoneSimulator() -> (udid: String, name: String, state: String)? {
+        guard let result = try? Shell.run("xcrun", arguments: [
+            "simctl", "list", "devices", "available", "-j"], environment: xcodeEnvironment),
+              result.succeeded,
+              let data = result.stdout.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let runtimes = json["devices"] as? [String: Any]
+        else { return nil }
+        var fallback: (String, String, String)?
+        for value in runtimes.values {
+            guard let devices = value as? [[String: Any]] else { continue }
+            for d in devices {
+                guard let name = d["name"] as? String, name.contains("iPhone"),
+                      let udid = d["udid"] as? String,
+                      let state = d["state"] as? String else { continue }
+                if state == "Booted" { return (udid, name, state) }
+                if fallback == nil { fallback = (udid, name, state) }
+            }
+        }
+        return fallback
     }
     #endif
 

@@ -275,3 +275,70 @@ struct ShellTests {
         #expect(result.stdout.contains("hello"))
     }
 }
+
+#if canImport(CoreGraphics) && canImport(ImageIO)
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
+
+@Suite("SnapshotDiff")
+struct SnapshotDiffTests {
+
+    /// Writes a synthetic PNG: `variant` "flat" fills one color, "noise"
+    /// fills a deterministic checkerboard of many colors.
+    private func makePNG(_ url: URL, variant: String) throws {
+        let w = 64, h = 64
+        guard let ctx = CGContext(
+            data: nil, width: w, height: h, bitsPerComponent: 8,
+            bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ), let data = ctx.data else { throw NSError(domain: "test", code: 1) }
+        let px = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        for i in 0..<(w * h) {
+            let o = i * 4
+            if variant == "flat" {
+                px[o] = 255; px[o + 1] = 255; px[o + 2] = 255; px[o + 3] = 255
+            } else {
+                // Integer hash of (x, y) — aperiodic so it survives the
+                // sampler's every-32nd-pixel stride.
+                let x = i % w, y = i / w
+                let v = (x &* 73856093) ^ (y &* 19349663)
+                px[o] = UInt8(truncatingIfNeeded: v >> 16)
+                px[o + 1] = UInt8(truncatingIfNeeded: v >> 8)
+                px[o + 2] = UInt8(truncatingIfNeeded: v)
+                px[o + 3] = 255
+            }
+        }
+        guard let image = ctx.makeImage(),
+              let dest = CGImageDestinationCreateWithURL(
+                  url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+            throw NSError(domain: "test", code: 2)
+        }
+        CGImageDestinationAddImage(dest, image, nil)
+        guard CGImageDestinationFinalize(dest) else { throw NSError(domain: "test", code: 3) }
+    }
+
+    @Test func flagsFlatCaptureAsBlank() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swiftport-test-\(UUID().uuidString).png")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try makePNG(tmp, variant: "flat")
+        #expect(SnapshotDiff.isBlankCapture(tmp))
+    }
+
+    @Test func passesDetailedCaptureAsNonBlank() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swiftport-test-\(UUID().uuidString).png")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try makePNG(tmp, variant: "noise")
+        #expect(!SnapshotDiff.isBlankCapture(tmp))
+    }
+
+    @Test func missingFileIsNotBlank() {
+        let missing = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swiftport-test-missing-\(UUID().uuidString).png")
+        #expect(!SnapshotDiff.isBlankCapture(missing))
+    }
+}
+#endif

@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="470" viewBox="0 0 1200 470"
+     role="img" aria-labelledby="title desc">
+  <title id="title">How swiftport verify works</title>
+  <desc id="desc">Pipeline: shared JSON contract fixtures are rendered by every platform's native UI, then one gate runs lint, contract tests, accessibility audits and ≤0.1% snapshot diffs on every pull request.</desc>
+
+  <rect width="1200" height="470" rx="26" fill="#0D0F12"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+    <text x="56" y="46" font-size="15" letter-spacing="2" fill="#8B94A3">SWIFTPORT VERIFY</text>
+    <text x="1144" y="46" text-anchor="end" font-size="15" fill="#5A6472">$ swiftport verify --mode all</text>
+  </g>
+  <text x="56" y="84" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="34" font-weight="700" fill="#F2F4F7">One state contract, enforced on every screen</text>
+
+  <!-- arrows between stages -->
+  <path d="M311 267 l14 8 l-14 8 M591 267 l14 8 l-14 8 M871 267 l14 8 l-14 8"
+        stroke="#5A6472" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ================= 01 fixtures ================= -->
+  <rect x="56" y="110" width="248" height="330" rx="12" fill="#12151A" stroke="#262C36" stroke-width="1.5"/>
+  <text x="76" y="142" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" letter-spacing="1.5">
+    <tspan fill="#F05138">01</tspan><tspan fill="#8B94A3"> / FIXTURES</tspan></text>
+  <text x="76" y="170" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="21" font-weight="700" fill="#F2F4F7">State fixtures</text>
+  <text x="76" y="192" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="13.5" fill="#5A6472">Verification/Contracts/</text>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#7A8494">
+    <text x="76" y="220">{</text>
+    <text x="76" y="242">  "id": "populated",</text>
+    <text x="76" y="264">  "phase": "loaded",</text>
+    <text x="76" y="286">  "tasks": [ … ]</text>
+    <text x="76" y="308">}</text>
+  </g>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#8B94A3">
+    <rect x="76" y="334" width="60" height="24" rx="6" fill="#161A20" stroke="#39424F"/>
+    <text x="106" y="350" text-anchor="middle">empty</text>
+    <rect x="144" y="334" width="76" height="24" rx="6" fill="#161A20" stroke="#39424F"/>
+    <text x="182" y="350" text-anchor="middle">loading</text>
+    <rect x="76" y="366" width="90" height="24" rx="6" fill="#161A20" stroke="#39424F"/>
+    <text x="121" y="382" text-anchor="middle">populated</text>
+    <rect x="174" y="366" width="60" height="24" rx="6" fill="#161A20" stroke="#39424F"/>
+    <text x="204" y="382" text-anchor="middle">error</text>
+    <rect x="76" y="398" width="82" height="24" rx="6" fill="#161A20" stroke="#39424F"/>
+    <text x="117" y="414" text-anchor="middle">longText</text>
+  </g>
+
+  <!-- ================= 02 render ================= -->
+  <rect x="336" y="110" width="248" height="330" rx="12" fill="#12151A" stroke="#262C36" stroke-width="1.5"/>
+  <text x="356" y="142" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" letter-spacing="1.5">
+    <tspan fill="#F05138">02</tspan><tspan fill="#8B94A3"> / RENDER</tspan></text>
+  <text x="356" y="170" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="21" font-weight="700" fill="#F2F4F7">Four native UIs</text>
+  <text x="356" y="192" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="13.5" fill="#5A6472">every app renders every fixture</text>
+
+  <g>
+    <text x="356" y="238" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="16" font-weight="600" fill="#F2F4F7">macOS + iOS</text>
+    <text x="356" y="258" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="13.5" fill="#8B94A3">SwiftUI</text>
+    <path d="M356 276 H564" stroke="#262C36" stroke-width="1"/>
+    <text x="356" y="294" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="16" font-weight="600" fill="#F2F4F7">Android</text>
+    <text x="356" y="314" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="13.5" fill="#8B94A3">Jetpack Compose</text>
+    <path d="M356 332 H564" stroke="#262C36" stroke-width="1"/>
+    <text x="356" y="350" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="16" font-weight="600" fill="#F2F4F7">Windows</text>
+    <text x="356" y="370" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="13.5" fill="#8B94A3">WinUI 3</text>
+    <path d="M356 388 H564" stroke="#262C36" stroke-width="1"/>
+    <text x="356" y="406" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="16" font-weight="600" fill="#F2F4F7">Linux</text>
+    <text x="356" y="426" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="13.5" fill="#8B94A3">GTK4 + Libadwaita</text>
+  </g>
+
+  <!-- ================= 03 gate ================= -->
+  <rect x="616" y="110" width="248" height="330" rx="12" fill="#12151A" stroke="#262C36" stroke-width="1.5"/>
+  <text x="636" y="142" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" letter-spacing="1.5">
+    <tspan fill="#F05138">03</tspan><tspan fill="#8B94A3"> / GATE</tspan></text>
+  <text x="636" y="170" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="21" font-weight="700" fill="#F2F4F7">Four stages</text>
+  <text x="636" y="192" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="13.5" fill="#5A6472">per enabled platform</text>
+
+  <g>
+    <circle cx="644" cy="230" r="7" fill="#3FB950"/>
+    <path d="M640.5 230 l2.5 2.5 l4.5 -5" stroke="#0D0F12" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <text x="660" y="235" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="15.5" fill="#F2F4F7">core-lint</text>
+    <text x="660" y="255" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="13" fill="#8B94A3">Core/ stays platform-pure</text>
+
+    <circle cx="644" cy="284" r="7" fill="#3FB950"/>
+    <path d="M640.5 284 l2.5 2.5 l4.5 -5" stroke="#0D0F12" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <text x="660" y="289" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="15.5" fill="#F2F4F7">contracts</text>
+    <text x="660" y="309" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="13" fill="#8B94A3">fixtures wired in every app</text>
+
+    <circle cx="644" cy="338" r="7" fill="#3FB950"/>
+    <path d="M640.5 338 l2.5 2.5 l4.5 -5" stroke="#0D0F12" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <text x="660" y="343" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="15.5" fill="#F2F4F7">audits</text>
+    <text x="660" y="363" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="13" fill="#8B94A3">XCUI accessibility suite</text>
+
+    <circle cx="644" cy="392" r="7" fill="#3FB950"/>
+    <path d="M640.5 392 l2.5 2.5 l4.5 -5" stroke="#0D0F12" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <text x="660" y="397" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="15.5" fill="#F2F4F7">snapshots</text>
+    <text x="660" y="417" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="13" fill="#8B94A3">pixel diff ≤ 0.1%</text>
+  </g>
+
+  <!-- ================= 04 outcome ================= -->
+  <rect x="896" y="110" width="248" height="330" rx="12" fill="#12151A" stroke="#262C36" stroke-width="1.5"/>
+  <text x="916" y="142" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" letter-spacing="1.5">
+    <tspan fill="#F05138">04</tspan><tspan fill="#8B94A3"> / OUTCOME</tspan></text>
+  <text x="916" y="170" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="21" font-weight="700" fill="#F2F4F7">Pass or block</text>
+  <text x="916" y="192" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="13.5" fill="#5A6472">on every pull request</text>
+
+  <circle cx="934" cy="232" r="15" fill="none" stroke="#3FB950" stroke-width="2"/>
+  <path d="M926.5 232 l5 5 l10 -11" stroke="#3FB950" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="960" y="237" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="16" font-weight="600" fill="#F2F4F7">all green → merge</text>
+  <text x="916" y="268" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="13" fill="#8B94A3">lint clean, contracts wired,</text>
+  <text x="916" y="286" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="13" fill="#8B94A3">audits pass, snapshots match</text>
+
+  <path d="M916 306 H1124" stroke="#262C36" stroke-width="1"/>
+
+  <text x="916" y="330" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="13" fill="#5A6472">on a diff:</text>
+  <text x="916" y="354" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="14" fill="#C7CEDA">--update-snapshots</text>
+  <text x="916" y="374" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="13" fill="#8B94A3">blesses current as goldens</text>
+  <text x="916" y="412" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="13.5" fill="#8B94A3">--report → report.html</text>
+</svg>

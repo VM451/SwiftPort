@@ -19,6 +19,7 @@ Bridges/LinuxC/*
 
 # Verification output (goldens under Snapshots/<platform>/ ARE committed)
 Verification/Snapshots/current/
+Verification/report.html
 
 # Android / Gradle
 .gradle/

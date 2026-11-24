@@ -17,6 +17,8 @@ public enum Verify {
         public var platforms: Set<ProjectConfig.Platform>?
         public var lowMemory = false
         public var jobs: Int? = nil
+        /// Write `Verification/report.html` — side-by-side snapshot review.
+        public var report = false
 
         public init() {}
     }
@@ -535,6 +537,136 @@ public enum Verify {
             try? fm.removeItem(at: dest)
             try fm.copyItem(at: png, to: dest)
         }
+    }
+
+    // MARK: - HTML report
+
+    /// Writes `Verification/report.html`: a stage summary plus side-by-side
+    /// current-vs-golden cards for every captured snapshot. Images are
+    /// referenced relatively, so the report works straight from the repo.
+    @discardableResult
+    public static func writeReport(root: URL, report: Report) throws -> URL {
+        let verificationDir = root.appendingPathComponent("Verification")
+        let snapshotsDir = verificationDir.appendingPathComponent("Snapshots")
+        let currentRoot = snapshotsDir.appendingPathComponent("current")
+        let out = verificationDir.appendingPathComponent("report.html")
+
+        var byName: [String: SnapshotResult] = [:]
+        for r in report.snapshotResults { byName[r.file] = r }
+
+        var sections: [String] = []
+        if let platforms = try? FileManager.default
+            .contentsOfDirectory(atPath: currentRoot.path).sorted() {
+            for platform in platforms where !platform.hasPrefix(".") {
+                let currentDir = currentRoot.appendingPathComponent(platform)
+                var cards: [String] = []
+                for png in pngFiles(in: currentDir) {
+                    let base = currentDir.standardizedFileURL
+                        .resolvingSymlinksInPath().path
+                    let p = png.standardizedFileURL.resolvingSymlinksInPath().path
+                    let rel = p.hasPrefix(base + "/")
+                        ? String(p.dropFirst(base.count + 1)) : png.lastPathComponent
+                    let result = byName[rel] ?? byName[png.lastPathComponent]
+                    cards.append(snapshotCard(
+                        platform: platform, rel: rel, result: result,
+                        goldenURL: snapshotsDir.appendingPathComponent(platform)
+                            .appendingPathComponent(rel)
+                    ))
+                }
+                if !cards.isEmpty {
+                    sections.append(
+                        "<h2>\(htmlEscape(platform))</h2><div class=\"grid\">"
+                            + cards.joined() + "</div>")
+                }
+            }
+        }
+
+        let name = (try? ProjectConfig.load(from: root).name) ?? root.lastPathComponent
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let verdict = report.ok ? "PASS" : "FAIL"
+        let verdictClass = report.ok ? "pass" : "fail"
+
+        var stageRows = ""
+        for stage in report.stages {
+            let cls = stage.ok ? "ok" : "fail"
+            let mark = stage.ok ? "✓" : "✗"
+            stageRows += "<tr class=\"\(cls)\"><td>\(mark)</td><td>\(htmlEscape(stage.name))</td></tr>"
+        }
+
+        let html = """
+        <!DOCTYPE html>
+        <html lang="en"><head><meta charset="utf-8">
+        <title>SwiftPort verify — \(htmlEscape(name))</title>
+        <style>
+          body { font-family: -apple-system, system-ui, sans-serif; margin: 2rem; color: #1a1a1a; }
+          h1 { font-size: 1.4rem; } h2 { font-size: 1.1rem; margin-top: 2rem; }
+          .verdict { display: inline-block; padding: .2rem .8rem; border-radius: 1rem;
+                     font-weight: 700; color: #fff; }
+          .verdict.pass { background: #1a7f37; } .verdict.fail { background: #cf222e; }
+          table { border-collapse: collapse; margin: 1rem 0; }
+          td { padding: .3rem 1rem .3rem 0; font-family: ui-monospace, monospace; font-size: .9rem; }
+          tr.ok td:first-child { color: #1a7f37; } tr.fail td:first-child { color: #cf222e; }
+          .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+                  gap: 1rem; }
+          .card { border: 1px solid #d0d7de; border-radius: 8px; padding: .6rem; }
+          .card .name { font-family: ui-monospace, monospace; font-size: .8rem;
+                        word-break: break-all; }
+          .badge { display: inline-block; padding: .1rem .5rem; border-radius: .7rem;
+                   font-size: .75rem; font-weight: 600; color: #fff; margin-left: .4rem; }
+          .b-match { background: #1a7f37; } .b-regression { background: #cf222e; }
+          .b-new { background: #0969da; } .b-blessed { background: #8250df; }
+          .b-skipped, .b-unknown { background: #6e7781; }
+          .diff { color: #57606a; font-size: .8rem; margin-left: .4rem; }
+          .pair { display: flex; gap: .5rem; margin-top: .5rem; }
+          .pair figure { margin: 0; flex: 1; }
+          .pair img { width: 100%; border: 1px solid #d0d7de; border-radius: 4px;
+                      image-rendering: auto; }
+          .pair figcaption { font-size: .7rem; color: #57606a; text-align: center; }
+          .meta { color: #57606a; font-size: .85rem; }
+        </style></head><body>
+        <h1>SwiftPort verify — \(htmlEscape(name))
+            <span class="verdict \(verdictClass)">\(verdict)</span></h1>
+        <p class="meta">Generated \(timestamp) · tolerance from swiftport.toml</p>
+        <table>\(stageRows)</table>
+        \(sections.isEmpty ? "<p class=\"meta\">No snapshots captured.</p>" : sections.joined(separator: "\n"))
+        </body></html>
+        """
+        try html.write(to: out, atomically: true, encoding: .utf8)
+        return out
+    }
+
+    static func snapshotCard(
+        platform: String, rel: String,
+        result: SnapshotResult?, goldenURL: URL
+    ) -> String {
+        let status = result?.status.rawValue ?? "unknown"
+        let badgeClass = "b-\(status)"
+        let diff = result?.diffFraction
+            .map { " <span class=\"diff\">\(String(format: "%.3f%%", $0 * 100))</span>" } ?? ""
+        let currentSrc = "Snapshots/current/\(platform)/\(rel)"
+        let goldenSrc = "Snapshots/\(platform)/\(rel)"
+        let hasGolden = FileManager.default.fileExists(atPath: goldenURL.path)
+
+        var figures = "<figure><img src=\"\(currentSrc)\" loading=\"lazy\">"
+            + "<figcaption>current</figcaption></figure>"
+        if hasGolden {
+            figures += "<figure><img src=\"\(goldenSrc)\" loading=\"lazy\">"
+                + "<figcaption>golden</figcaption></figure>"
+        }
+        return """
+        <div class="card">
+          <div class="name">\(htmlEscape(rel))
+            <span class="badge \(badgeClass)">\(status)</span>\(diff)</div>
+          <div class="pair">\(figures)</div>
+        </div>
+        """
+    }
+
+    static func htmlEscape(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
     // MARK: - Rendering

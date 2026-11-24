@@ -237,6 +237,9 @@ struct VerifyCommand: ParsableCommand {
     @Option(name: .long, help: "Comma-separated platforms to verify")
     var platforms: String?
 
+    @Flag(name: .long, help: "Write Verification/report.html (side-by-side snapshot review)")
+    var report: Bool = false
+
     func run() throws {
         let root = try RootLocator.require()
         var options = Verify.Options()
@@ -250,6 +253,7 @@ struct VerifyCommand: ParsableCommand {
         options.captureOnly = captureOnly
         options.lowMemory = lowMemory
         options.jobs = jobs
+        options.report = report
         if let platforms {
             let parsed = Set(platforms.split(separator: ",").compactMap {
                 ProjectConfig.Platform(rawValue: $0.trimmingCharacters(in: .whitespaces).lowercased())
@@ -260,8 +264,12 @@ struct VerifyCommand: ParsableCommand {
             options.platforms = parsed
         }
 
-        let report = try Verify.run(root: root, options: options)
-        print(Verify.render(report))
-        if !report.ok { throw ExitCode(1) }
+        let reportResult = try Verify.run(root: root, options: options)
+        print(Verify.render(reportResult))
+        if options.report {
+            let url = try Verify.writeReport(root: root, report: reportResult)
+            print("report: \(url.path)")
+        }
+        if !reportResult.ok { throw ExitCode(1) }
     }
 }

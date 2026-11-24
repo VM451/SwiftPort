@@ -68,9 +68,10 @@ See template `README.md`. Key contracts:
   is not reachable from agent shells → stage fails with
   "failed to initialize for UI testing" until a human approves once in a
   GUI terminal. CI runners are pre-authorized.
-- No git remote configured — nothing has run on GitHub Actions yet; the
-  template's generated-app CI is the first real exercise of the
-  Android/Windows/Linux bridge code.
+- Remote: `origin` = github.com/VM451/SwiftPort; repo CI exercises the
+  template end-to-end (init → doctor → verify → build) on macOS/Ubuntu,
+  including the audits stage — first real run of Android/Windows/Linux
+  bridge code and XCUIAccessibilityAudit on runners.
 
 ## Conventions
 

@@ -1,0 +1,54 @@
+name: SwiftPort CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  cli:
+    name: CLI build + tests
+    strategy:
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+
+  template-smoke:
+    name: Template smoke test (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xcodegen
+        run: brew install xcodegen
+      - name: Scaffold sample app
+        run: |
+          swift build
+          .build/debug/swiftport init SampleApp --path ./SampleApp --no-git
+      - name: Doctor
+        working-directory: SampleApp
+        run: $GITHUB_WORKSPACE/.build/debug/swiftport doctor
+      - name: Verify (lint + contracts + snapshots capture)
+        working-directory: SampleApp
+        run: |
+          $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode contracts
+          $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode snapshots --capture-only
+      - name: Build Apple target
+        working-directory: SampleApp
+        run: $GITHUB_WORKSPACE/.build/debug/swiftport build --target apple
+      - name: Upload snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-snapshots
+          path: SampleApp/Verification/Snapshots/current/
+          if-no-files-found: ignore

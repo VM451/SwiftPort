@@ -8,6 +8,7 @@ import PackageDescription
 //   macOS (optional local builds): brew install gtk4 libadwaita
 let package = Package(
     name: "__APP_MODULE__Linux",
+    platforms: [.iOS(.v17), .macOS(.v14)],
     dependencies: [
         .package(path: "../../Core"),
         .package(url: "https://git.aparoksha.dev/aparoksha/adwaita-swift", from: "0.1.0")

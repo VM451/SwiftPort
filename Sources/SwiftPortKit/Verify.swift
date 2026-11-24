@@ -174,13 +174,30 @@ public enum Verify {
         if platforms.contains(.android) {
             let androidDir = root.appendingPathComponent("Apps/Android")
             if FileManager.default.fileExists(atPath: androidDir.path) {
-                results.append(try gradleTask(
-                    androidDir: androidDir, task: "testDebugUnitTest",
-                    name: "contracts:android", lowMemory: lowMemory, jobs: jobs
-                ))
+                if Self.jdkAvailable() {
+                    results.append(try gradleTask(
+                        androidDir: androidDir, task: "testDebugUnitTest",
+                        name: "contracts:android", lowMemory: lowMemory, jobs: jobs
+                    ))
+                } else {
+                    results.append(StageResult(
+                        name: "contracts:android",
+                        ok: true,
+                        detail: "skipped — JDK 17+ required for Gradle "
+                            + "(run `swiftport doctor` to audit)"
+                    ))
+                }
             }
         }
         return results
+    }
+
+    /// True when a working JDK is on PATH. `/usr/bin/javac` on macOS is a
+    /// stub that exits non-zero without a real JDK — `javac -version`
+    /// distinguishes the two.
+    static func jdkAvailable() -> Bool {
+        guard Shell.which("javac") != nil else { return false }
+        return (try? Shell.run("javac", arguments: ["-version"]))?.succeeded == true
     }
 
     /// `dotnet test` on a Windows contract-test project.
@@ -216,10 +233,9 @@ public enum Verify {
             return StageResult(name: name, ok: false,
                                detail: "gradlew missing in Apps/Android — re-run swiftport init")
         }
-        // /usr/bin/javac is a stub on macOS without a JDK — fail with a
-        // clear hint instead of gradlew's launcher error.
-        if Shell.which("javac") == nil
-            || ((try? Shell.run("javac", arguments: ["-version"]))?.succeeded != true) {
+        // Defensive: callers pre-check jdkAvailable(), but keep the guard
+        // for direct invocations.
+        if !Self.jdkAvailable() {
             return StageResult(name: name, ok: false,
                                detail: "JDK 17+ required — install a JDK and re-run `swiftport doctor`")
         }
@@ -415,6 +431,12 @@ public enum Verify {
 
         guard FileManager.default.fileExists(atPath: androidDir.path) else {
             return [SnapshotResult(file: "android", status: .skipped, diffFraction: nil)]
+        }
+        guard Self.jdkAvailable() else {
+            return [SnapshotResult(
+                file: "android", status: .skipped, diffFraction: nil,
+                detail: "skipped — JDK 17+ required for Gradle"
+            )]
         }
 
         let stage = try gradleTask(

@@ -134,6 +134,66 @@ struct SyncTests {
     }
 }
 
+@Suite("Bridge codegen")
+struct BridgeGenTests {
+
+    private func makeRoot() throws -> URL {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swiftport-bridge-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        return tmp
+    }
+
+    private var config: ProjectConfig {
+        var c = ProjectConfig()
+        c.name = "Task Flow"
+        c.bundleIDPrefix = "com.example"
+        return c
+    }
+
+    @Test func androidGeneratesKotlinJniAndCMake() throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let written = try BridgeGen.generateAndroid(root: root, config: config)
+        #expect(written.count == 4)
+
+        let kt = try String(
+            contentsOf: root.appendingPathComponent(
+                "Bridges/AndroidJNI/src/main/java/com/example/taskflow/bridge/SwiftPortBridge.kt"),
+            encoding: .utf8)
+        #expect(kt.contains("package com.example.taskflow.bridge"))
+        #expect(kt.contains("external fun nativeFixtureSnapshotJson"))
+        #expect(kt.contains("fun snapshotFromFixture"))
+
+        let shim = try String(
+            contentsOf: root.appendingPathComponent("Bridges/AndroidJNI/src/main/cpp/jni_shim.c"),
+            encoding: .utf8)
+        #expect(shim.contains("Java_com_example_taskflow_bridge_SwiftPortBridge_nativeFixtureSnapshotJson"))
+        #expect(shim.contains("dlopen(\"libswiftportcore.so\""))
+        #expect(shim.contains("swiftport_store_add_task"))
+
+        #expect(FileManager.default.fileExists(
+            atPath: root.appendingPathComponent("Bridges/AndroidJNI/CMakeLists.txt").path))
+    }
+
+    @Test func windowsGeneratesPInvokeWrapper() throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let written = try BridgeGen.generateWindows(root: root, config: config)
+        #expect(written.count == 2)
+
+        let cs = try String(
+            contentsOf: root.appendingPathComponent("Bridges/WindowsABI/SwiftPortBridge.cs"),
+            encoding: .utf8)
+        #expect(cs.contains("namespace com.example.taskflow.Bridge"))
+        #expect(cs.contains("EntryPoint = \"swiftport_fixture_snapshot_json\""))
+        #expect(cs.contains("Marshal.StringToCoTaskMemUTF8"))
+        #expect(cs.contains("class TaskListSnapshot"))
+    }
+}
+
 @Suite("Template render")
 struct TemplateTests {
 

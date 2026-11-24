@@ -1,10 +1,10 @@
 import Foundation
 
 /// `swiftport sync` — discovers the bridge surface (`SwiftPortExported`
-/// conformances in `Core/`) and regenerates per-platform glue that is cheap
-/// to produce deterministically. Heavy codegen (JNI, P/Invoke) lands in
-/// later phases; today sync covers Apple (Xcode project regen) and reports
-/// readiness for every selected platform.
+/// conformances in `Core/`) and regenerates per-platform glue: the Apple
+/// Xcode project, Kotlin/JNI bindings for Android, and C# P/Invoke
+/// bindings for Windows. All bridges speak JSON over the `swiftport_*`
+/// C ABI exported by `AppCoreCABI`.
 public enum Sync {
     public struct ExportedType: Sendable, Equatable {
         public var name: String
@@ -82,7 +82,7 @@ public enum Sync {
     ) throws -> Report {
         let config = try config ?? ProjectConfig.load(from: root)
         var actions: [String] = []
-        var skipped: [ProjectConfig.Platform] = []
+        let skipped: [ProjectConfig.Platform] = []
 
         let exports = try scanExports(root: root)
         actions.append("found \(exports.count) exported type(s) in Core/")
@@ -102,15 +102,20 @@ public enum Sync {
             actions.append("linux: AppCore linked directly via SwiftPM (no bridge codegen)")
         }
 
-        for platform in [ProjectConfig.Platform.android, .windows] where config.platforms.contains(platform) {
-            if platform == .android {
-                actions.append("android: \(exports.count) export(s) ready for swift-java JNI codegen "
-                    + "(requires the Swift Android SDK — see Apps/Android/README.md)")
-            } else {
-                skipped.append(platform)
-                actions.append("\(platform.rawValue): C# contract tests scaffolded; "
-                    + "C-ABI/PInvoke codegen pending (Phase 3)")
-            }
+        if config.platforms.contains(.android) {
+            let written = try BridgeGen.generateAndroid(root: root, config: config)
+            actions.append("android: generated Kotlin/JNI bridge "
+                + "(\(written.count) files) → Bridges/AndroidJNI/")
+            actions.append("android: build libswiftportcore.so per ABI with the "
+                + "Swift Android SDK — see Bridges/AndroidJNI/README.md")
+        }
+
+        if config.platforms.contains(.windows) {
+            let written = try BridgeGen.generateWindows(root: root, config: config)
+            actions.append("windows: generated C# P/Invoke bridge "
+                + "(\(written.count) files) → Bridges/WindowsABI/")
+            actions.append("windows: build AppCoreCABI.dll on Windows and drop it "
+                + "under Bridges/WindowsABI/lib/ — see Bridges/WindowsABI/README.md")
         }
 
         return Report(exports: exports, actions: actions, skippedPlatforms: skipped)

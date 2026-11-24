@@ -10,13 +10,21 @@ let package = Package(
     name: "AppCore",
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
-        .library(name: "AppCore", targets: ["AppCore"])
+        .library(name: "AppCore", targets: ["AppCore"]),
+        // C-ABI dynamic library for the Android/Windows/Linux bridges.
+        // `swift build` produces AppCoreCABI.{so,dll,dylib} per target.
+        .library(name: "AppCoreCABI", type: .dynamic, targets: ["AppCoreCABI"])
     ],
     targets: [
         .target(name: "AppCore"),
+        .target(name: "AppCoreCABI", dependencies: ["AppCore"]),
         .testTarget(
             name: "AppCoreTests",
             dependencies: ["AppCore"]
+        ),
+        .testTarget(
+            name: "AppCoreCABITests",
+            dependencies: ["AppCoreCABI"]
         )
     ]
 )

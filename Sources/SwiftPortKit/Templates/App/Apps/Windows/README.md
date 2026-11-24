@@ -23,9 +23,26 @@ dotnet test Apps/Windows/tests/__APP_MODULE__.Tests   # contract fixtures
 and Linux the Windows target is verified by the GitHub Actions `windows`
 runner instead.
 
-## Swift bridge (Phase 3 status)
+## Swift bridge
 
-The WinUI app will consume `Core/` through a C-ABI `.dll` exported from
-Swift plus generated C# `DllImport` bindings (`swiftport sync`). Until that
-codegen lands, the app is a minimal Fluent 2 shell and the contract tests
-prove fixture parity.
+`swiftport sync` generates `Bridges/WindowsABI/SwiftPortBridge.cs` — C#
+wire models plus `DllImport` bindings for the `swiftport_*` C ABI exported
+by `AppCoreCABI.dll`. Every call returns the JSON encoding of
+`TaskListSnapshot` (Swift `Codable`, ISO-8601 dates); strings cross as
+UTF-8.
+
+To activate the bridge on Windows:
+
+```powershell
+cd Core
+swift build -c release --product AppCoreCABI
+```
+
+Copy the resulting `AppCoreCABI.dll` to `Bridges/WindowsABI/lib/` — both
+csproj files glob that directory into their output, so `dotnet test` and
+`dotnet build` pick it up automatically. `BridgeTests` exercises the real
+P/Invoke round-trip (fixture snapshot + store mutations) whenever the DLL
+is present.
+
+Until the DLL is staged, the contract tests prove fixture parity and the
+bridge tests skip cleanly.

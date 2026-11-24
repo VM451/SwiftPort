@@ -62,10 +62,28 @@ public enum Init {
 
         var notes: [String] = []
         if options.platforms.contains(.android) {
-            notes.append("android: Compose app scaffolded — Swift→JNI bridge (swift-java) is generated on demand, see Apps/Android/README.md")
+            notes.append("android: Compose app + Kotlin/JNI bridge generated — build "
+                + "libswiftportcore.so per ABI with the Swift Android SDK "
+                + "(see Bridges/AndroidJNI/README.md)")
         }
         if options.platforms.contains(.windows) {
-            notes.append("windows: WinUI 3 + xunit scaffold — C-ABI/PInvoke bridge codegen pending (Phase 3)")
+            notes.append("windows: WinUI 3 + xunit + C# P/Invoke bridge generated — "
+                + "build AppCoreCABI.dll on Windows (see Bridges/WindowsABI/README.md)")
+        }
+
+        // Emit bridge bindings for platforms that consume generated glue.
+        // (Apple needs none; Linux links AppCore via SwiftPM directly.)
+        for platform in [ProjectConfig.Platform.android, .windows]
+        where options.platforms.contains(platform) {
+            do {
+                if platform == .android {
+                    _ = try BridgeGen.generateAndroid(root: dest, config: config)
+                } else {
+                    _ = try BridgeGen.generateWindows(root: dest, config: config)
+                }
+            } catch {
+                notes.append("\(platform.rawValue): bridge generation failed: \(error)")
+            }
         }
 
         var gitInitialized = false

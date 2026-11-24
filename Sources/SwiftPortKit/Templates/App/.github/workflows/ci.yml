@@ -100,11 +100,20 @@ jobs:
           swift-version: "6.0"
 
       # GitHub's ubuntu image ships the Android SDK; ANDROID_HOME is preset.
+      - name: Install Android NDK
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME" -name sdkmanager -type f | head -1)
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "ndk;27.0.12077973"
+
       - name: Build swiftport CLI
         run: |
           git clone --depth 1 "${SWIFTPORT_REPO:-https://github.com/nitiptc/swiftport}" /tmp/swiftport-src
           swift build -c release --package-path /tmp/swiftport-src
           echo "/tmp/swiftport-src/.build/release" >> "$GITHUB_PATH"
+
+      - name: Sync bridges
+        run: swiftport sync
 
       - name: Toolchain check
         run: swiftport doctor --platforms android
@@ -151,10 +160,25 @@ jobs:
           swift build -c release --package-path C:\swiftport-src
           echo "C:\swiftport-src\.build\release" >> $env:GITHUB_PATH
 
+      - name: Sync bridges
+        run: swiftport sync
+
+      - name: Build Swift C ABI
+        working-directory: Core
+        run: swift build -c release --product AppCoreCABI
+
+      - name: Stage AppCoreCABI.dll
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Recurse Core\.build -Filter *AppCoreCABI.dll | Select-Object -First 1
+          if (-not $dll) { throw "AppCoreCABI.dll not found under Core\.build" }
+          New-Item -ItemType Directory -Force Bridges\WindowsABI\lib | Out-Null
+          Copy-Item $dll.FullName Bridges\WindowsABI\lib\AppCoreCABI.dll
+
       - name: Toolchain check
         run: swiftport doctor --platforms windows
 
-      - name: Verify contracts
+      - name: Verify contracts (includes P/Invoke bridge tests)
         run: swiftport verify --mode contracts --platforms windows
 
       - name: Build WinUI app

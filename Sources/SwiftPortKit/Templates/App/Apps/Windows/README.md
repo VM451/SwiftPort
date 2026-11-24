@@ -46,3 +46,10 @@ is present.
 
 Until the DLL is staged, the contract tests prove fixture parity and the
 bridge tests skip cleanly.
+
+## UI states
+
+`MainWindow` renders all four contract phases (loading / empty / loaded /
+error) and honors the shared `SWIFTPORT_SCENARIO` + `SWIFTPORT_CONTRACTS_DIR`
++ `SWIFTPORT_THEME` environment contract, so a future `swiftport verify`
+Windows capture can drive it like the Apple/Linux apps.

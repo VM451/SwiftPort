@@ -451,9 +451,12 @@ public enum Verify {
             ))
         }
 
-        for platform in platforms where platform == .windows {
-            results.append(SnapshotResult(
-                file: platform.rawValue, status: .skipped, diffFraction: nil))
+        if platforms.contains(.windows) {
+            results.append(contentsOf: try runWindowsSnapshots(
+                root: root, config: config,
+                update: update, captureOnly: captureOnly,
+                lowMemory: lowMemory, jobs: jobs
+            ))
         }
         if results.isEmpty {
             results.append(SnapshotResult(file: "-", status: .skipped, diffFraction: nil))
@@ -884,6 +887,150 @@ public enum Verify {
             update: update, captureOnly: captureOnly,
             tolerance: config.verify.snapshotTolerance
         )
+    }
+
+    // MARK: - Windows snapshots (WinUI + screen capture)
+
+    /// Launches the unpackaged WinUI app once per contract fixture × theme
+    /// with the SWIFTPORT_* env contract, pins the window via
+    /// SWIFTPORT_WINDOW_BOUNDS, screen-captures that rect with PowerShell +
+    /// System.Drawing, then diffs against goldens. Windows hosts/CI only.
+    static func runWindowsSnapshots(
+        root: URL,
+        config: ProjectConfig,
+        update: Bool,
+        captureOnly: Bool,
+        lowMemory: Bool,
+        jobs: Int?
+    ) throws -> [SnapshotResult] {
+        #if os(Windows)
+        let windowsDir = root.appendingPathComponent("Apps/Windows")
+        let srcDir = windowsDir.appendingPathComponent("src")
+        let contractsDir = root.appendingPathComponent("Verification/Contracts")
+        let snapshotsRoot = root.appendingPathComponent("Verification/Snapshots")
+        let currentDir = snapshotsRoot.appendingPathComponent("current/windows")
+        let goldenDir = snapshotsRoot.appendingPathComponent("windows")
+        let fm = FileManager.default
+
+        func skipped(_ detail: String) -> [SnapshotResult] {
+            [SnapshotResult(file: "windows", status: .skipped,
+                            diffFraction: nil, detail: detail)]
+        }
+
+        guard fm.fileExists(atPath: srcDir.path) else {
+            return skipped("Apps/Windows/src not found")
+        }
+        guard Shell.which("dotnet") != nil else {
+            return skipped("dotnet SDK not found — install .NET 8 SDK")
+        }
+
+        // The app project is the single .csproj under src/<Module>.App/.
+        var csproj: URL?
+        if let projectDirs = try? fm.contentsOfDirectory(atPath: srcDir.path) {
+            for dir in projectDirs {
+                let dirURL = srcDir.appendingPathComponent(dir)
+                if let files = try? fm.contentsOfDirectory(atPath: dirURL.path),
+                   let hit = files.first(where: { $0.hasSuffix(".csproj") }) {
+                    csproj = dirURL.appendingPathComponent(hit)
+                    break
+                }
+            }
+        }
+        guard let csproj else {
+            return skipped("no app .csproj under Apps/Windows/src")
+        }
+
+        var buildArgs = ["build", csproj.path, "-c", "Release"]
+        let effective = Build.jobCount(jobs: jobs, lowMemory: lowMemory)
+        if let effective { buildArgs += ["-m:\(effective)"] }
+        let build = try Shell.run("dotnet", arguments: buildArgs,
+                                  currentDirectory: windowsDir)
+        guard build.succeeded else {
+            return [SnapshotResult(file: "build", status: .regression,
+                                   diffFraction: nil,
+                                   detail: build.combined.suffix(2000).description)]
+        }
+
+        // Freshest .exe under the project's bin/Release output.
+        let projectName = csproj.deletingLastPathComponent().lastPathComponent
+        let releaseDir = srcDir.appendingPathComponent(projectName)
+            .appendingPathComponent("bin/Release")
+        guard let relExes = try? fm.subpathsOfDirectory(atPath: releaseDir.path),
+              let relExe = relExes.filter({ $0.hasSuffix(".exe") }).sorted().last
+        else {
+            return skipped("no .exe under \(releaseDir.path) — build failed?")
+        }
+        let exe = releaseDir.appendingPathComponent(relExe)
+
+        let fixtureIDs = contractFixtureIDs(in: contractsDir)
+        guard !fixtureIDs.isEmpty else {
+            return skipped("no contract fixtures found in Verification/Contracts")
+        }
+
+        try? fm.removeItem(at: currentDir)
+        try fm.createDirectory(at: currentDir, withIntermediateDirectories: true)
+
+        // Single fixed viewport for now — the matrix grows with
+        // SWIFTPORT_WINDOW_BOUNDS variants.
+        let viewportW = 1200, viewportH = 800
+        let bounds = "0,0,\(viewportW),\(viewportH)"
+        var badNames: [String] = []
+        for fixtureID in fixtureIDs {
+            for theme in config.verify.themes {
+                let name = "\(fixtureID)__\(theme)__\(viewportW)x\(viewportH)"
+                let png = currentDir.appendingPathComponent("\(name).png")
+
+                let process = Process()
+                process.executableURL = exe
+                var env = ProcessInfo.processInfo.environment
+                env["SWIFTPORT_SCENARIO"] = fixtureID
+                env["SWIFTPORT_THEME"] = theme
+                env["SWIFTPORT_CONTRACTS_DIR"] = contractsDir.path
+                env["SWIFTPORT_WINDOW_BOUNDS"] = bounds
+                process.environment = env
+                guard (try? process.run()) != nil else { continue }
+                Thread.sleep(forTimeInterval: 3.5)
+
+                let psPath = png.path.replacingOccurrences(of: "'", with: "''")
+                let script = """
+                Add-Type -AssemblyName System.Drawing
+                $b = New-Object System.Drawing.Bitmap \(viewportW),\(viewportH)
+                $g = [System.Drawing.Graphics]::FromImage($b)
+                $g.CopyFromScreen(0,0,0,0,$b.Size)
+                $b.Save('\(psPath)')
+                $g.Dispose(); $b.Dispose()
+                """
+                _ = try? Shell.run("powershell",
+                                   arguments: ["-NoProfile", "-Command", script],
+                                   currentDirectory: windowsDir)
+                if process.isRunning {
+                    process.terminate()
+                    process.waitUntilExit()
+                }
+
+                if SnapshotDiff.isBlankCapture(png) {
+                    try? fm.removeItem(at: png)
+                    badNames.append("\(name).png")
+                }
+            }
+        }
+
+        var results = try finishSnapshots(
+            current: currentDir, golden: goldenDir,
+            update: update, captureOnly: captureOnly,
+            tolerance: config.verify.snapshotTolerance
+        )
+        for name in badNames {
+            results.append(SnapshotResult(
+                file: name, status: .skipped, diffFraction: nil,
+                detail: "capture looked blank"))
+        }
+        return results.sorted { $0.file < $1.file }
+        #else
+        return [SnapshotResult(file: "windows", status: .skipped,
+                               diffFraction: nil,
+                               detail: "Windows snapshots run on Windows hosts/CI")]
+        #endif
     }
 
     /// Fixture ids from `Verification/Contracts/*.json` (the `id` field).

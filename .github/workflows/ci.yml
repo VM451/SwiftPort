@@ -37,12 +37,15 @@ jobs:
       - name: Doctor
         working-directory: SampleApp
         run: $GITHUB_WORKSPACE/.build/debug/swiftport doctor
-      - name: Verify (lint + contracts + audits + snapshots capture)
+      - name: Verify contracts
         working-directory: SampleApp
-        run: |
-          $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode contracts
-          $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode audits
-          $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode snapshots --capture-only --report
+        run: $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode contracts
+      - name: Verify audits
+        working-directory: SampleApp
+        run: $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode audits
+      - name: Verify snapshots (capture)
+        working-directory: SampleApp
+        run: $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode snapshots --capture-only --report
       - name: Build Apple target
         working-directory: SampleApp
         run: $GITHUB_WORKSPACE/.build/debug/swiftport build --target apple

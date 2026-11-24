@@ -45,14 +45,16 @@ jobs:
         # Golden comparison is machine-sensitive (font rasterization differs
         # across hosts); CI captures the full matrix as artifacts for review.
         # Strict diff runs locally via `swiftport verify --mode snapshots`.
-        run: swiftport verify --mode snapshots --capture-only
+        run: swiftport verify --mode snapshots --capture-only --report
 
       - name: Upload current snapshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: snapshots-apple
-          path: Verification/Snapshots/current/
+          path: |
+            Verification/report.html
+            Verification/Snapshots/
           if-no-files-found: ignore
 
   linux:
@@ -91,14 +93,16 @@ jobs:
         # screenshots the root window. Golden comparison is machine-
         # sensitive; CI captures the matrix as artifacts for review.
         # Strict diff runs locally on a Linux host via `swiftport verify`.
-        run: swiftport verify --mode snapshots --platforms linux --capture-only
+        run: swiftport verify --mode snapshots --platforms linux --capture-only --report
 
       - name: Upload snapshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: snapshots-linux
-          path: Verification/Snapshots/current/linux/
+          path: |
+            Verification/report.html
+            Verification/Snapshots/
           if-no-files-found: ignore
 
   android:
@@ -143,14 +147,16 @@ jobs:
       - name: Record Paparazzi screenshots
         # Golden comparison is machine-sensitive; CI captures the matrix as
         # artifacts. Strict diff runs locally via `swiftport verify`.
-        run: swiftport verify --mode snapshots --platforms android --capture-only
+        run: swiftport verify --mode snapshots --platforms android --capture-only --report
 
       - name: Upload snapshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: snapshots-android
-          path: Verification/Snapshots/current/android/
+          path: |
+            Verification/report.html
+            Verification/Snapshots/
           if-no-files-found: ignore
 
       - name: Build APK

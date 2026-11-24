@@ -42,7 +42,7 @@ jobs:
         run: |
           $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode contracts
           $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode audits
-          $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode snapshots --capture-only
+          $GITHUB_WORKSPACE/.build/debug/swiftport verify --mode snapshots --capture-only --report
       - name: Build Apple target
         working-directory: SampleApp
         run: $GITHUB_WORKSPACE/.build/debug/swiftport build --target apple
@@ -51,5 +51,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: template-snapshots
-          path: SampleApp/Verification/Snapshots/current/
+          path: |
+            SampleApp/Verification/report.html
+            SampleApp/Verification/Snapshots/
           if-no-files-found: ignore

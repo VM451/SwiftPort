@@ -392,10 +392,11 @@ public enum Verify {
            result.combined.range(
                of: "failed to initialize for UI testing",
                options: .caseInsensitive) != nil {
-            detail = "UI automation permission required — approve the macOS "
-                + "authentication prompt (or grant the test runner access in "
-                + "System Settings → Privacy & Security → Automation), then "
-                + "re-run `swiftport verify`.\n" + detail
+            // Append — render() shows only the detail tail.
+            detail += "\nUI automation permission required — approve the "
+                + "macOS authentication prompt (or grant the test runner "
+                + "access in System Settings → Privacy & Security → "
+                + "Automation), then re-run `swiftport verify`."
         }
         return [StageResult(name: name, ok: result.succeeded, detail: detail)]
         #else

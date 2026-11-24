@@ -62,6 +62,12 @@ See template `README.md`. Key contracts:
   blessing garbage (blank-frame + SpringBoard detection, `--mask=black`
   pins the Dynamic Island). Treat local iOS goldens as suspect; CI is
   the reliable capture environment.
+- **UI-test audits need one-time interactive approval**: `swiftport verify
+  --mode audits` runs `xcodebuild test` on the generated UITests bundle;
+  macOS demands Touch ID/password consent for UI automation and the prompt
+  is not reachable from agent shells → stage fails with
+  "failed to initialize for UI testing" until a human approves once in a
+  GUI terminal. CI runners are pre-authorized.
 - No git remote configured — nothing has run on GitHub Actions yet; the
   template's generated-app CI is the first real exercise of the
   Android/Windows/Linux bridge code.

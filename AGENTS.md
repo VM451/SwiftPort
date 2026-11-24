@@ -39,9 +39,28 @@ See template `README.md`. Key contracts:
   SwiftUI/UIKit/AppKit/Combine/etc. `#if canImport(X)` guards are allowed.
 - `Verification/Contracts/*.json` — shared state fixtures; every platform
   must render them (`swiftport verify --mode contracts`).
-- `Verification/Snapshots/apple/` — blessed goldens; `current/` is gitignored.
+- `Verification/Snapshots/{apple,ios,linux,...}/` — blessed goldens per
+  platform; `current/` is gitignored.
 - Bridge surface = `SwiftPortExported` protocol conformances in `Core/`
   (scanned by `swiftport sync`; macro-based `@SwiftPortExport` is a later phase).
+
+## Host quirks (this machine)
+
+- `xcode-select` → CLT; all `xcodebuild`/`xcrun simctl`/`swift test` need
+  `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` (kit sets it
+  automatically for its own calls via `xcodeEnvironment`).
+- `javac` on PATH is the macOS stub — no JDK. Android contract/snapshot
+  stages skip cleanly; real builds need CI or a JDK install.
+- No `dotnet` — Windows targets are CI-only.
+- `adwaita-swift` 0.1.0 does not compile on macOS (brew glib 2.90 removed
+  `G_CONNECT_AFTER`); Linux app builds only on Linux/CI.
+- **iOS simulator screen capture is broken on this host** (iOS 27.0 runtime,
+  Xcode 27.2): `simctl io screenshot` returns flat frames or SpringBoard
+  for every app — even Apple's Settings. `verify` detects this and skips
+  iOS snapshots; blessing iOS goldens requires a healthy Mac or CI.
+- No git remote configured — nothing has run on GitHub Actions yet; the
+  template's generated-app CI is the first real exercise of the
+  Android/Windows/Linux bridge code.
 
 ## Conventions
 

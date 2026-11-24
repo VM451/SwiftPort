@@ -582,20 +582,24 @@ public enum Verify {
                     "booted", tokens.bundleID,
                 ], environment: launchEnv)
                 guard let launch, launch.succeeded else { continue }
-                Thread.sleep(forTimeInterval: 3)
-                _ = try? Shell.run("xcrun", arguments: [
-                    "simctl", "io", "booted", "screenshot", png.path], environment: xcodeEnvironment)
-                totalCount += 1
-                // A capture is "bad" when the framebuffer never composited the
-                // app: either a flat uncomposited frame, or SpringBoard still
-                // frontmost because the app never appeared. Three in a row
-                // means a broken capture pipeline, not sparse screens.
-                var bad = SnapshotDiff.isBlankCapture(png)
-                if !bad, fm.fileExists(atPath: springRef.path),
-                   let diff = try? SnapshotDiff.compare(pngA: png, pngB: springRef),
-                   diff < 0.05 {
-                    bad = true
+                // First frame can lag several seconds on a loaded host —
+                // retry once before declaring the capture bad.
+                var bad = false
+                for attempt in 0..<2 {
+                    Thread.sleep(forTimeInterval: attempt == 0 ? 3 : 5)
+                    _ = try? Shell.run("xcrun", arguments: [
+                        "simctl", "io", "booted", "screenshot", png.path],
+                        environment: xcodeEnvironment)
+                    bad = SnapshotDiff.isBlankCapture(png)
+                    if !bad,
+                       fm.fileExists(atPath: springRef.path),
+                       let diff = try? SnapshotDiff.compare(pngA: png, pngB: springRef),
+                       diff < 0.05 {
+                        bad = true
+                    }
+                    if !bad { break }
                 }
+                totalCount += 1
                 if bad {
                     try? fm.removeItem(at: png)
                     badCount += 1

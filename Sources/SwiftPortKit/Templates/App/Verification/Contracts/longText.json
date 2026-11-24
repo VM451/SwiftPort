@@ -1,0 +1,23 @@
+{
+  "id": "longText",
+  "phase": "loaded",
+  "tasks": [
+    {
+      "id": "44444444-4444-4444-4444-444444444444",
+      "title": "Eine ausserordentlich lange Aufgabe die den verfügbaren Platz in jeder Sprache sprengen soll — mit Ümläuten, ß und sehr viel Text",
+      "notes": "Dies ist ein ausserordentlich langer Hinweistext, der getestet werden soll, damit sichergestellt ist, dass die Benutzeroberfläche lange Zeichenketten ohne Abschneiden, Überlappen oder Layoutverschiebungen darstellen kann. Er enthält viele Wörter und sollte in mehreren Zeilen umbrechen.",
+      "isCompleted": false,
+      "priority": "high",
+      "createdAt": "2026-01-08T08:00:00Z"
+    },
+    {
+      "id": "55555555-5555-5555-5555-555555555555",
+      "title": "RTL test: مهمة طويلة جدا تحتاج إلى مساحة",
+      "notes": "نص عربي طويل لاختبار الاتجاه من اليمين إلى اليسار والتفاف الأسطر",
+      "isCompleted": false,
+      "priority": "medium",
+      "createdAt": "2026-01-08T08:05:00Z"
+    }
+  ],
+  "errorMessage": null
+}

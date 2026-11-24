@@ -1,0 +1,14 @@
+# SwiftPort project configuration
+# Platforms: apple, android, windows, linux
+
+[project]
+name = "__APP_NAME__"
+bundle_id_prefix = "__BUNDLE_ID_PREFIX__"
+
+[targets]
+platforms = ["apple", "linux"]
+
+[verify]
+# Max fraction of differing pixels allowed in snapshot comparisons (0.1%).
+snapshot_tolerance = 0.001
+themes = ["light", "dark"]

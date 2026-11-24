@@ -1,0 +1,31 @@
+{
+  "id": "populated",
+  "phase": "loaded",
+  "tasks": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "title": "Write the PRD",
+      "notes": "Cover all four native platforms.",
+      "isCompleted": true,
+      "priority": "high",
+      "createdAt": "2026-01-05T09:00:00Z"
+    },
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "title": "Scaffold the monorepo",
+      "notes": "",
+      "isCompleted": false,
+      "priority": "medium",
+      "createdAt": "2026-01-06T10:30:00Z"
+    },
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "title": "Ship the Linux build",
+      "notes": "GTK4 + Libadwaita, GNOME HIG.",
+      "isCompleted": false,
+      "priority": "low",
+      "createdAt": "2026-01-07T14:15:00Z"
+    }
+  ],
+  "errorMessage": null
+}

@@ -1,0 +1,6 @@
+{
+  "id": "error",
+  "phase": "error",
+  "tasks": [],
+  "errorMessage": "Couldn't load tasks. Check your connection and try again."
+}

@@ -1,0 +1,24 @@
+# Swift
+.build/
+.swiftpm/
+
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Generated bridges (regenerate via `swiftport sync`)
+Bridges/AndroidJNI/*
+!Bridges/AndroidJNI/.gitkeep
+Bridges/WindowsABI/*
+!Bridges/WindowsABI/.gitkeep
+Bridges/LinuxC/*
+!Bridges/LinuxC/.gitkeep
+
+# Verification output (goldens under Snapshots/<platform>/ ARE committed)
+Verification/Snapshots/current/
+
+# OS
+.DS_Store

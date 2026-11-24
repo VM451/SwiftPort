@@ -1,0 +1,77 @@
+name: SwiftPort CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apple:
+    name: Apple (macOS + contracts + snapshots)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Build swiftport CLI
+        run: |
+          git clone --depth 1 "${SWIFTPORT_REPO:-https://github.com/nitiptc/swiftport}" /tmp/swiftport-src
+          swift build -c release --package-path /tmp/swiftport-src
+          echo "/tmp/swiftport-src/.build/release" >> "$GITHUB_PATH"
+
+      - name: Toolchain check
+        run: swiftport doctor
+
+      - name: Sync bridges & projects
+        run: swiftport sync
+
+      - name: Build Apple target
+        run: swiftport build --target apple --release
+
+      - name: Verify (lint + contracts + snapshots)
+        run: swiftport verify
+
+      - name: Upload current snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-apple
+          path: Verification/Snapshots/current/
+          if-no-files-found: ignore
+
+  linux:
+    name: Linux (GTK4 + contracts)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libgtk-4-dev libadwaita-1-dev
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+
+      - name: Build swiftport CLI
+        run: |
+          git clone --depth 1 "${SWIFTPORT_REPO:-https://github.com/nitiptc/swiftport}" /tmp/swiftport-src
+          swift build -c release --package-path /tmp/swiftport-src
+          echo "/tmp/swiftport-src/.build/release" >> "$GITHUB_PATH"
+
+      - name: Toolchain check
+        run: swiftport doctor
+
+      - name: Verify contracts + build Linux target
+        run: |
+          swiftport verify --mode contracts --platforms linux
+          swiftport build --target linux --release

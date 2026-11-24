@@ -1,0 +1,36 @@
+# Verification
+
+Shared UI contract and visual regression infrastructure.
+
+## Contracts/
+
+`Contracts/*.json` are deterministic state fixtures — the single source of
+truth every platform must render identically. Each file describes one
+`TaskPhase` (`loading`, `empty`, `loaded`, `error`) plus tasks/error data.
+
+Run them:
+
+```sh
+swiftport verify --mode contracts
+```
+
+Adding a fixture = adding a JSON file. Every platform's contract tests and
+snapshot runner pick it up automatically — that is the point: a new state
+cannot ship on one OS while silently missing on another.
+
+## Snapshots/
+
+Golden PNGs per platform, blessed explicitly:
+
+```sh
+swiftport verify --mode snapshots --update-snapshots   # bless current renders
+swiftport verify --mode snapshots                      # compare (CI gate)
+```
+
+- `apple/` — macOS renders from `Apps/Apple`'s `snapshot-runner`
+  (light + dark per scenario). iOS goldens land with device/simulator capture.
+- `current/` — gitignored; latest capture for diffing.
+
+Pixel tolerance comes from `swiftport.toml` (`verify.snapshot_tolerance`,
+default `0.001` = 0.1%). Any intentional UI change requires re-blessing —
+that is the human sign-off the PRD mandates.

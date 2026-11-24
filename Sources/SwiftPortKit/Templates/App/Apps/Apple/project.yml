@@ -1,0 +1,69 @@
+name: __APP_MODULE__
+options:
+  bundleIdPrefix: __BUNDLE_ID_PREFIX__
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  Core:
+    path: ../../Core
+  LocalUI:
+    path: .
+
+targets:
+  __APP_MODULE__Mac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: App
+    dependencies:
+      - package: Core
+        product: AppCore
+      - package: LocalUI
+        product: AppUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: __BUNDLE_ID__
+        PRODUCT_NAME: __APP_MODULE__
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: "YES"
+
+  __APP_MODULE__iOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: App
+    dependencies:
+      - package: Core
+        product: AppCore
+      - package: LocalUI
+        product: AppUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: __BUNDLE_ID__
+        PRODUCT_NAME: __APP_MODULE__
+        GENERATE_INFOPLIST_FILE: "YES"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+
+schemes:
+  __APP_MODULE__:
+    build:
+      targets:
+        __APP_MODULE__Mac: all
+    run:
+      config: Debug
+  __APP_MODULE__iOS:
+    build:
+      targets:
+        __APP_MODULE__iOS: all
+    run:
+      config: Debug

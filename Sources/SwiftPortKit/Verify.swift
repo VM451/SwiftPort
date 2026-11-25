@@ -374,15 +374,16 @@ public enum Verify {
                                     + "(run `swiftport sync` or install xcodegen)")]
         }
 
-        // TEST_RUNNER_ prefix forwards SWIFTPORT_ROOT into the test-runner
-        // process environment (xcodebuild strips the prefix).
+        // TEST_RUNNER_ variables are forwarded only from xcodebuild's
+        // process environment; as CLI arguments they become build settings.
+        var environment = xcodeEnvironment
+        environment["TEST_RUNNER_SWIFTPORT_ROOT"] = root.path
         let result = try Shell.run("xcodebuild", arguments: [
             "test",
             "-project", project.path,
             "-scheme", tokens.appModule,
             "-destination", "platform=macOS",
-            "TEST_RUNNER_SWIFTPORT_ROOT=\(root.path)",
-        ], currentDirectory: appleDir, environment: xcodeEnvironment)
+        ], currentDirectory: appleDir, environment: environment)
 
         var detail = result.combined
             .components(separatedBy: .newlines)
